@@ -8,56 +8,42 @@ responses_path = {
     "user.profile": "profile.json",
     "user.margins": "margins.json",
     "user.margins.segment": "margins.json",
-
     "orders": "orders.json",
     "trades": "trades.json",
     "order.info": "order_info.json",
     "order.trades": "order_trades.json",
-
     "portfolio.positions": "positions.json",
     "portfolio.holdings": "holdings.json",
     "portfolio.holdings.auction": "auctions_list.json",
-
     # MF api endpoints
     "mf.orders": "mf_orders.json",
     "mf.order.info": "mf_orders_info.json",
-
     "mf.sips": "mf_sips.json",
     "mf.sip.info": "mf_sip_info.json",
-
     "mf.holdings": "mf_holdings.json",
     "mf.instruments": "mf_instruments.csv",
-
     "market.instruments": "instruments_nse.csv",
     "market.instruments.all": "instruments_all.csv",
     "market.historical": "historical_minute.json",
     "market.trigger_range": "trigger_range.json",
-
     "market.quote": "quote.json",
     "market.quote.ohlc": "ohlc.json",
     "market.quote.ltp": "ltp.json",
-
     "gtt": "gtt_get_orders.json",
     "gtt.place": "gtt_place_order.json",
     "gtt.info": "gtt_get_order.json",
     "gtt.modify": "gtt_modify_order.json",
     "gtt.delete": "gtt_delete_order.json",
-
     # Order margin & charges
     "order.margins": "order_margins.json",
     "order.margins.basket": "basket_margins.json",
-    "order.contract_note": "virtual_contract_note.json"
+    "order.contract_note": "virtual_contract_note.json",
 }
 
 
 def full_path(rel_path):
     """return the full path of given rel_path."""
-    return os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            rel_path
-        )
-    )
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), rel_path))
 
 
 def get_response(key):

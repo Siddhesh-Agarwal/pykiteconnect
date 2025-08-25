@@ -1,12 +1,13 @@
 # coding: utf-8
 
 """Pytest config."""
+
 import os
 import sys
 import pytest
 from kiteconnect import KiteConnect
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../helpers'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../helpers"))
 
 
 def pytest_addoption(parser):
@@ -35,4 +36,6 @@ def pytest_generate_tests(metafunc):
 @pytest.fixture()
 def kiteconnect(api_key, access_token, root_url):
     """Init Kite connect object."""
-    return KiteConnect(api_key=api_key, access_token=access_token, root=root_url or None)
+    return KiteConnect(
+        api_key=api_key, access_token=access_token, root=root_url or None
+    )

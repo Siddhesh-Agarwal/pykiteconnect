@@ -23,7 +23,7 @@ try:
         transaction_type=kite.TRANSACTION_TYPE_BUY,
         quantity=1,
         product=kite.PRODUCT_CNC,
-        order_type=kite.ORDER_TYPE_MARKET
+        order_type=kite.ORDER_TYPE_MARKET,
     )
 
     logging.info("Order placed. ID is: {}".format(order_id))
@@ -41,7 +41,7 @@ kite.place_mf_order(
     tradingsymbol="INF090I01239",
     transaction_type=kite.TRANSACTION_TYPE_BUY,
     amount=5000,
-    tag="mytag"
+    tag="mytag",
 )
 
 # Cancel a mutual fund order

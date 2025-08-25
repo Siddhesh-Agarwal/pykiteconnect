@@ -30,7 +30,8 @@ PORT = 5010
 HOST = "127.0.0.1"
 
 
-def serializer(obj): return isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
+def serializer(obj):
+    return isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
 
 
 # Kite Connect App settings. Go to https://developers.kite.trade/apps/
@@ -42,10 +43,14 @@ kite_api_secret = "kite_api_secret"
 redirect_url = "http://{host}:{port}/login".format(host=HOST, port=PORT)
 
 # Login url
-login_url = "https://kite.zerodha.com/connect/login?api_key={api_key}".format(api_key=kite_api_key)
+login_url = "https://kite.zerodha.com/connect/login?api_key={api_key}".format(
+    api_key=kite_api_key
+)
 
 # Kite connect console url
-console_url = "https://developers.kite.trade/apps/{api_key}".format(api_key=kite_api_key)
+console_url = "https://developers.kite.trade/apps/{api_key}".format(
+    api_key=kite_api_key
+)
 
 # App
 app = Flask(__name__)
@@ -68,8 +73,7 @@ login_template = """
 
 
 def get_kite_client():
-    """Returns a kite client object
-    """
+    """Returns a kite client object"""
     kite = KiteConnect(api_key=kite_api_key)
     if "access_token" in session:
         kite.set_access_token(session["access_token"])
@@ -82,7 +86,7 @@ def index():
         api_key=kite_api_key,
         redirect_url=redirect_url,
         console_url=console_url,
-        login_url=login_url
+        login_url=login_url,
     )
 
 
@@ -103,12 +107,7 @@ def login():
 
     return login_template.format(
         access_token=data["access_token"],
-        user_data=json.dumps(
-            data,
-            indent=4,
-            sort_keys=True,
-            default=serializer
-        )
+        user_data=json.dumps(data, indent=4, sort_keys=True, default=serializer),
     )
 
 

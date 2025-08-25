@@ -11,11 +11,12 @@ import kiteconnect.exceptions as ex
 
 def test_request_pool():
     from kiteconnect import KiteConnect
+
     pool = {
         "pool_connections": 10,
         "pool_maxsize": 10,
         "max_retries": 0,
-        "pool_block": False
+        "pool_block": False,
     }
 
     kiteconnect = KiteConnect(api_key="random", access_token="random", pool=pool)
@@ -60,7 +61,7 @@ def test_holdings(kiteconnect):
 
 
 def test_auction_instruments(kiteconnect):
-    """ Test get_auction_instruments """
+    """Test get_auction_instruments"""
     auction_inst = kiteconnect.get_auction_instruments()
     mock_resp = utils.get_json_response("portfolio.holdings.auction")["data"]
     utils.assert_responses(auction_inst, mock_resp)
@@ -90,7 +91,11 @@ def test_order_history(kiteconnect):
     orders = kiteconnect.orders()
 
     if len(orders) == 0:
-        warnings.warn(UserWarning("Order info: Couldn't perform individual order test since orderbook is empty."))
+        warnings.warn(
+            UserWarning(
+                "Order info: Couldn't perform individual order test since orderbook is empty."
+            )
+        )
         return
 
     order = kiteconnect.order_history(order_id=orders[0]["order_id"])
@@ -119,7 +124,11 @@ def test_order_trades(kiteconnect):
     trades = kiteconnect.trades()
 
     if len(trades) == 0:
-        warnings.warn(UserWarning("Trades: Couldn't perform individual order test since trades is empty."))
+        warnings.warn(
+            UserWarning(
+                "Trades: Couldn't perform individual order test since trades is empty."
+            )
+        )
         return
 
     order_trades = kiteconnect.order_trades(order_id=trades[0]["order_id"])
@@ -154,7 +163,11 @@ def test_mf_order_info(kiteconnect):
     orders = kiteconnect.mf_orders()
 
     if len(orders) == 0:
-        warnings.warn(UserWarning("MF order info: Couldn't perform individual order test since orderbook is empty."))
+        warnings.warn(
+            UserWarning(
+                "MF order info: Couldn't perform individual order test since orderbook is empty."
+            )
+        )
         return
 
     order = kiteconnect.mf_orders(order_id=orders[0]["order_id"])
@@ -187,27 +200,32 @@ def test_mf_instruments(kiteconnect):
 # Historical API tests
 ######################
 
-@pytest.mark.parametrize("max_interval,candle_interval", [
-    (30, "minute"),
-    (365, "hour"),
-    (2000, "day"),
-    (90, "3minute"),
-    (90, "5minute"),
-    (90, "10minute"),
-    (180, "15minute"),
-    (180, "30minute"),
-    (365, "60minute")
-], ids=[
-    "minute",
-    "hour",
-    "day",
-    "3minute",
-    "5minute",
-    "10minute",
-    "15minute",
-    "30minute",
-    "60minute",
-])
+
+@pytest.mark.parametrize(
+    "max_interval,candle_interval",
+    [
+        (30, "minute"),
+        (365, "hour"),
+        (2000, "day"),
+        (90, "3minute"),
+        (90, "5minute"),
+        (90, "10minute"),
+        (180, "15minute"),
+        (180, "30minute"),
+        (365, "60minute"),
+    ],
+    ids=[
+        "minute",
+        "hour",
+        "day",
+        "3minute",
+        "5minute",
+        "10minute",
+        "15minute",
+        "30minute",
+        "60minute",
+    ],
+)
 def test_historical_data_intervals(max_interval, candle_interval, kiteconnect):
     """Test historical data for each intervals"""
     # Reliance token
@@ -215,17 +233,23 @@ def test_historical_data_intervals(max_interval, candle_interval, kiteconnect):
     to_date = datetime.datetime.now()
     diff = int(max_interval / 3)
 
-    from_date = (to_date - datetime.timedelta(days=diff))
+    from_date = to_date - datetime.timedelta(days=diff)
 
     # minute data
-    data = kiteconnect.historical_data(instrument_token, from_date, to_date, candle_interval)
-    mock_resp = kiteconnect._format_historical(utils.get_json_response("market.historical")["data"])
+    data = kiteconnect.historical_data(
+        instrument_token, from_date, to_date, candle_interval
+    )
+    mock_resp = kiteconnect._format_historical(
+        utils.get_json_response("market.historical")["data"]
+    )
     utils.assert_responses(data, mock_resp)
 
     # Max interval
-    from_date = (to_date - datetime.timedelta(days=(max_interval + 1)))
+    from_date = to_date - datetime.timedelta(days=(max_interval + 1))
     with pytest.raises(ex.InputException):
-        kiteconnect.historical_data(instrument_token, from_date, to_date, candle_interval)
+        kiteconnect.historical_data(
+            instrument_token, from_date, to_date, candle_interval
+        )
 
 
 def test_quote(kiteconnect):
@@ -288,7 +312,9 @@ def test_trigger_range(kiteconnect):
     mock_resp = utils.get_json_response("market.trigger_range")["data"]
     utils.assert_responses(buy_resp, mock_resp)
 
-    buy_resp = kiteconnect.trigger_range(kiteconnect.TRANSACTION_TYPE_SELL, *instruments)
+    buy_resp = kiteconnect.trigger_range(
+        kiteconnect.TRANSACTION_TYPE_SELL, *instruments
+    )
     mock_resp = utils.get_json_response("market.trigger_range")["data"]
     utils.assert_responses(buy_resp, mock_resp)
 

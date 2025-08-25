@@ -40,7 +40,9 @@ def on_connect(ws, response):
 
 # Callback when current connection is closed.
 def on_close(ws, code, reason):
-    logging.info("Connection closed: {code} - {reason}".format(code=code, reason=reason))
+    logging.info(
+        "Connection closed: {code} - {reason}".format(code=code, reason=reason)
+    )
 
 
 # Callback when connection closed with error.

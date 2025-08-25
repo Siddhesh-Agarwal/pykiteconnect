@@ -9,10 +9,7 @@ import kiteconnect.exceptions as ex
 
 
 def get_fake_token(self, route, params=None):
-    return {
-        "access_token": "TOKEN",
-        "login_time": None
-    }
+    return {"access_token": "TOKEN", "login_time": None}
 
 
 def get_fake_delete(self, route, params=None):
@@ -20,9 +17,11 @@ def get_fake_delete(self, route, params=None):
 
 
 class TestKiteConnectObject:
-
     def test_login_url(self, kiteconnect):
-        assert kiteconnect.login_url() == "https://kite.zerodha.com/connect/login?api_key=<API-KEY>&v=3"
+        assert (
+            kiteconnect.login_url()
+            == "https://kite.zerodha.com/connect/login?api_key=<API-KEY>&v=3"
+        )
 
     def test_request_without_pooling(self, kiteconnect):
         assert isinstance(kiteconnect.reqsession, requests.Session) is True
@@ -31,7 +30,7 @@ class TestKiteConnectObject:
     def test_request_pooling(self, kiteconnect_with_pooling):
         assert isinstance(kiteconnect_with_pooling.reqsession, requests.Session) is True
         assert kiteconnect_with_pooling.reqsession.request is not None
-        http_adapter = kiteconnect_with_pooling.reqsession.adapters['https://']
+        http_adapter = kiteconnect_with_pooling.reqsession.adapters["https://"]
         assert http_adapter._pool_maxsize == 10
         assert http_adapter._pool_connections == 20
         assert http_adapter._pool_block is False
@@ -39,7 +38,6 @@ class TestKiteConnectObject:
 
     @responses.activate
     def test_set_session_expiry_hook_meth(self, kiteconnect):
-
         def mock_hook():
             raise ex.TokenException("token expired it seems! please login again")
 
@@ -48,10 +46,12 @@ class TestKiteConnectObject:
         # Now lets try raising TokenException
         responses.add(
             responses.GET,
-            "{0}{1}".format(kiteconnect.root, kiteconnect._routes["portfolio.positions"]),
+            "{0}{1}".format(
+                kiteconnect.root, kiteconnect._routes["portfolio.positions"]
+            ),
             body='{"error_type": "TokenException", "message": "Please login again"}',
             content_type="application/json",
-            status=403
+            status=403,
         )
         with pytest.raises(ex.TokenException) as exc:
             kiteconnect.positions()
@@ -68,8 +68,7 @@ class TestKiteConnectObject:
     @patch.object(KiteConnect, "_post", get_fake_token)
     def test_generate_session(self, kiteconnect):
         resp = kiteconnect.generate_session(
-            request_token="<REQUEST-TOKEN>",
-            api_secret="<API-SECRET>"
+            request_token="<REQUEST-TOKEN>", api_secret="<API-SECRET>"
         )
         assert resp["access_token"] == "TOKEN"
         assert kiteconnect.access_token == "TOKEN"

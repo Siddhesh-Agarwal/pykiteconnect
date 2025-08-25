@@ -123,6 +123,9 @@ docs/_build/
 # PyBuilder
 target/
 
+# Ruff cache
+.ruff_cache/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

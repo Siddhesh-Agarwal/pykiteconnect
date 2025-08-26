@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-    exceptions.py
+exceptions.py
 
-    Exceptions raised by the Kite Connect client.
+Exceptions raised by the Kite Connect client.
 
-    :copyright: (c) 2021 by Zerodha Technology.
-    :license: see LICENSE for details.
+:copyright: (c) 2021 by Zerodha Technology.
+:license: see LICENSE for details.
 """
 
 

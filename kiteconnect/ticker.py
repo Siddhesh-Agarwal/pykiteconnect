@@ -1,213 +1,36 @@
 # -*- coding: utf-8 -*-
 """
-    ticker.py
+ticker.py
 
-    Websocket implementation for kite ticker
+Modern WebSocket implementation for Kite ticker using Python's websockets library
 
-    :copyright: (c) 2021 by Zerodha Technology Pvt. Ltd.
-    :license: see LICENSE for details.
+:copyright: (c) 2021 by Zerodha Technology Pvt. Ltd.
+:license: see LICENSE for details.
 """
-import six
-import sys
-import time
-import json
-import struct
-import logging
-import threading
+
+from asyncio import iscoroutinefunction, sleep
+from json import JSONDecodeError, loads, dumps
+from logging import getLogger
+from ssl import create_default_context
+from struct import unpack
 from datetime import datetime
-from twisted.internet import reactor, ssl
-from twisted.python import log as twisted_log
-from twisted.internet.protocol import ReconnectingClientFactory
-from autobahn.twisted.websocket import WebSocketClientProtocol, \
-    WebSocketClientFactory, connectWS
+from typing import Any, Dict, List, Literal, Optional, Callable
+from urllib.parse import urlencode
+from websockets import ClientConnection, connect
+from websockets.exceptions import ConnectionClosed
 
 from .__version__ import __version__, __title__
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
-class KiteTickerClientProtocol(WebSocketClientProtocol):
-    """Kite ticker autobahn WebSocket protocol."""
-
-    PING_INTERVAL = 2.5
-    KEEPALIVE_INTERVAL = 5
-
-    _next_ping = None
-    _next_pong_check = None
-    _last_pong_time = None
-    _last_ping_time = None
-
-    def __init__(self, *args, **kwargs):
-        """Initialize protocol with all options passed from factory."""
-        super(KiteTickerClientProtocol, self).__init__(*args, **kwargs)
-
-    # Overide method
-    def onConnect(self, response):  # noqa
-        """Called when WebSocket server connection was established"""
-        self.factory.ws = self
-
-        if self.factory.on_connect:
-            self.factory.on_connect(self, response)
-
-        # Reset reconnect on successful reconnect
-        self.factory.resetDelay()
-
-    # Overide method
-    def onOpen(self):  # noqa
-        """Called when the initial WebSocket opening handshake was completed."""
-        # send ping
-        self._loop_ping()
-        # init last pong check after X seconds
-        self._loop_pong_check()
-
-        if self.factory.on_open:
-            self.factory.on_open(self)
-
-    # Overide method
-    def onMessage(self, payload, is_binary):  # noqa
-        """Called when text or binary message is received."""
-        if self.factory.on_message:
-            self.factory.on_message(self, payload, is_binary)
-
-    # Overide method
-    def onClose(self, was_clean, code, reason):  # noqa
-        """Called when connection is closed."""
-        if not was_clean:
-            if self.factory.on_error:
-                self.factory.on_error(self, code, reason)
-
-        if self.factory.on_close:
-            self.factory.on_close(self, code, reason)
-
-        # Cancel next ping and timer
-        self._last_ping_time = None
-        self._last_pong_time = None
-
-        if self._next_ping:
-            self._next_ping.cancel()
-
-        if self._next_pong_check:
-            self._next_pong_check.cancel()
-
-    def onPong(self, response):  # noqa
-        """Called when pong message is received."""
-        if self._last_pong_time and self.factory.debug:
-            log.debug("last pong was {} seconds back.".format(time.time() - self._last_pong_time))
-
-        self._last_pong_time = time.time()
-
-        if self.factory.debug:
-            log.debug("pong => {}".format(response))
-
+class KiteTicker:
     """
-    Custom helper and exposed methods.
-    """
-
-    def _loop_ping(self):  # noqa
-        """Start a ping loop where it sends ping message every X seconds."""
-        if self.factory.debug:
-            if self._last_ping_time:
-                log.debug("last ping was {} seconds back.".format(time.time() - self._last_ping_time))
-
-        # Set current time as last ping time
-        self._last_ping_time = time.time()
-
-        # Call self after X seconds
-        self._next_ping = self.factory.reactor.callLater(self.PING_INTERVAL, self._loop_ping)
-
-    def _loop_pong_check(self):
-        """
-        Timer sortof to check if connection is still there.
-
-        Checks last pong message time and disconnects the existing connection to make sure it doesn't become a ghost connection.
-        """
-        if self._last_pong_time:
-            # No pong message since long time, so init reconnect
-            last_pong_diff = time.time() - self._last_pong_time
-            if last_pong_diff > (2 * self.PING_INTERVAL):
-                if self.factory.debug:
-                    log.debug("Last pong was {} seconds ago. So dropping connection to reconnect.".format(
-                        last_pong_diff))
-                # drop existing connection to avoid ghost connection
-                self.dropConnection(abort=True)
-
-        # Call self after X seconds
-        self._next_pong_check = self.factory.reactor.callLater(self.PING_INTERVAL, self._loop_pong_check)
-
-
-class KiteTickerClientFactory(WebSocketClientFactory, ReconnectingClientFactory):
-    """Autobahn WebSocket client factory to implement reconnection and custom callbacks."""
-
-    protocol = KiteTickerClientProtocol
-    maxDelay = 5
-    maxRetries = 10
-
-    _last_connection_time = None
-
-    def __init__(self, *args, **kwargs):
-        """Initialize with default callback method values."""
-        self.debug = False
-        self.ws = None
-        self.on_open = None
-        self.on_error = None
-        self.on_close = None
-        self.on_message = None
-        self.on_connect = None
-        self.on_reconnect = None
-        self.on_noreconnect = None
-
-        super(KiteTickerClientFactory, self).__init__(*args, **kwargs)
-
-    def startedConnecting(self, connector):  # noqa
-        """On connecting start or reconnection."""
-        if not self._last_connection_time and self.debug:
-            log.debug("Start WebSocket connection.")
-
-        self._last_connection_time = time.time()
-
-    def clientConnectionFailed(self, connector, reason):  # noqa
-        """On connection failure (When connect request fails)"""
-        if self.retries > 0:
-            log.error("Retrying connection. Retry attempt count: {}. Next retry in around: {} seconds".format(self.retries, int(round(self.delay))))
-
-            # on reconnect callback
-            if self.on_reconnect:
-                self.on_reconnect(self.retries)
-
-        # Retry the connection
-        self.retry(connector)
-        self.send_noreconnect()
-
-    def clientConnectionLost(self, connector, reason):  # noqa
-        """On connection lost (When ongoing connection got disconnected)."""
-        if self.retries > 0:
-            # on reconnect callback
-            if self.on_reconnect:
-                self.on_reconnect(self.retries)
-
-        # Retry the connection
-        self.retry(connector)
-        self.send_noreconnect()
-
-    def send_noreconnect(self):
-        """Callback `no_reconnect` if max retries are exhausted."""
-        if self.maxRetries is not None and (self.retries > self.maxRetries):
-            if self.debug:
-                log.debug("Maximum retries ({}) exhausted.".format(self.maxRetries))
-                # Stop the loop for exceeding max retry attempts
-                self.stop()
-
-            if self.on_noreconnect:
-                self.on_noreconnect()
-
-
-class KiteTicker(object):
-    """
-    The WebSocket client for connecting to Kite Connect's streaming quotes service.
+    Modern WebSocket client for connecting to Kite Connect's streaming quotes service.
 
     Getting started:
     ---------------
-        #!python
+        import asyncio
         import logging
         from kiteconnect import KiteTicker
 
@@ -216,144 +39,28 @@ class KiteTicker(object):
         # Initialise
         kws = KiteTicker("your_api_key", "your_access_token")
 
-        def on_ticks(ws, ticks):
+        async def on_ticks(ws, ticks):
             # Callback to receive ticks.
-            logging.debug("Ticks: {}".format(ticks))
+            logging.debug(f"Ticks: {ticks}")
 
-        def on_connect(ws, response):
+        async def on_connect(ws):
             # Callback on successful connect.
             # Subscribe to a list of instrument_tokens (RELIANCE and ACC here).
-            ws.subscribe([738561, 5633])
-
+            await ws.subscribe([738561, 5633])
             # Set RELIANCE to tick in `full` mode.
-            ws.set_mode(ws.MODE_FULL, [738561])
+            await ws.set_mode(ws.MODE_FULL, [738561])
 
-        def on_close(ws, code, reason):
-            # On connection close stop the event loop.
-            # Reconnection will not happen after executing `ws.stop()`
-            ws.stop()
+        async def on_close(ws, code, reason):
+            # On connection close
+            logging.info(f"Connection closed: {code} - {reason}")
 
         # Assign the callbacks.
         kws.on_ticks = on_ticks
         kws.on_connect = on_connect
         kws.on_close = on_close
 
-        # Infinite loop on the main thread. Nothing after this will run.
-        # You have to use the pre-defined callbacks to manage subscriptions.
-        kws.connect()
-
-    Callbacks
-    ---------
-    In below examples `ws` is the currently initialised WebSocket object.
-
-    - `on_ticks(ws, ticks)` -  Triggered when ticks are recevied.
-        - `ticks` - List of `tick` object. Check below for sample structure.
-    - `on_close(ws, code, reason)` -  Triggered when connection is closed.
-        - `code` - WebSocket standard close event code (https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent)
-        - `reason` - DOMString indicating the reason the server closed the connection
-    - `on_error(ws, code, reason)` -  Triggered when connection is closed with an error.
-        - `code` - WebSocket standard close event code (https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent)
-        - `reason` - DOMString indicating the reason the server closed the connection
-    - `on_connect` -  Triggered when connection is established successfully.
-        - `response` - Response received from server on successful connection.
-    - `on_message(ws, payload, is_binary)` -  Triggered when message is received from the server.
-        - `payload` - Raw response from the server (either text or binary).
-        - `is_binary` - Bool to check if response is binary type.
-    - `on_reconnect(ws, attempts_count)` -  Triggered when auto reconnection is attempted.
-        - `attempts_count` - Current reconnect attempt number.
-    - `on_noreconnect(ws)` -  Triggered when number of auto reconnection attempts exceeds `reconnect_tries`.
-    - `on_order_update(ws, data)` -  Triggered when there is an order update for the connected user.
-
-
-    Tick structure (passed to the `on_ticks` callback)
-    ---------------------------
-        [{
-            'instrument_token': 53490439,
-            'mode': 'full',
-            'volume_traded': 12510,
-            'last_price': 4084.0,
-            'average_traded_price': 4086.55,
-            'last_traded_quantity': 1,
-            'total_buy_quantity': 2356
-            'total_sell_quantity': 2440,
-            'change': 0.46740467404674046,
-            'last_trade_time': datetime.datetime(2018, 1, 15, 13, 16, 54),
-            'exchange_timestamp': datetime.datetime(2018, 1, 15, 13, 16, 56),
-            'oi': 21845,
-            'oi_day_low': 0,
-            'oi_day_high': 0,
-            'ohlc': {
-                'high': 4093.0,
-                'close': 4065.0,
-                'open': 4088.0,
-                'low': 4080.0
-            },
-            'tradable': True,
-            'depth': {
-                'sell': [{
-                    'price': 4085.0,
-                    'orders': 1048576,
-                    'quantity': 43
-                }, {
-                    'price': 4086.0,
-                    'orders': 2752512,
-                    'quantity': 134
-                }, {
-                    'price': 4087.0,
-                    'orders': 1703936,
-                    'quantity': 133
-                }, {
-                    'price': 4088.0,
-                    'orders': 1376256,
-                    'quantity': 70
-                }, {
-                    'price': 4089.0,
-                    'orders': 1048576,
-                    'quantity': 46
-                }],
-                'buy': [{
-                    'price': 4084.0,
-                    'orders': 589824,
-                    'quantity': 53
-                }, {
-                    'price': 4083.0,
-                    'orders': 1245184,
-                    'quantity': 145
-                }, {
-                    'price': 4082.0,
-                    'orders': 1114112,
-                    'quantity': 63
-                }, {
-                    'price': 4081.0,
-                    'orders': 1835008,
-                    'quantity': 69
-                }, {
-                    'price': 4080.0,
-                    'orders': 2752512,
-                    'quantity': 89
-                }]
-            }
-        },
-        ...,
-        ...]
-
-    Auto reconnection
-    -----------------
-
-    Auto reconnection is enabled by default and it can be disabled by passing `reconnect` param while initialising `KiteTicker`.
-    On a side note, reconnection mechanism cannot happen if event loop is terminated using `stop` method inside `on_close` callback.
-
-    Auto reonnection mechanism is based on [Exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff) algorithm in which
-    next retry interval will be increased exponentially. `reconnect_max_delay` and `reconnect_max_tries` params can be used to tewak
-    the alogrithm where `reconnect_max_delay` is the maximum delay after which subsequent reconnection interval will become constant and
-    `reconnect_max_tries` is maximum number of retries before its quiting reconnection.
-
-    For example if `reconnect_max_delay` is 60 seconds and `reconnect_max_tries` is 50 then the first reconnection interval starts from
-    minimum interval which is 2 seconds and keep increasing up to 60 seconds after which it becomes constant and when reconnection attempt
-    is reached upto 50 then it stops reconnecting.
-
-    method `stop_retry` can be used to stop ongoing reconnect attempts and `on_reconnect` callback will be called with current reconnect
-    attempt and `on_noreconnect` is called when reconnection attempts reaches max retries.
+        # Connect and run
+        asyncio.run(kws.connect())
     """
 
     EXCHANGE_MAP = {
@@ -366,366 +73,323 @@ class KiteTicker(object):
         "mcx": 7,
         "mcxsx": 8,
         "indices": 9,
-        # bsecds is replaced with it's official segment name bcd
-        # so,bsecds key will be depreciated in next version
-        "bsecds": 6,
+        "bsecds": 6,  # Deprecated, use bcd
     }
 
-    # Default connection timeout
+    # Connection settings
     CONNECT_TIMEOUT = 30
-    # Default Reconnect max delay.
+    PING_INTERVAL = 2.5
+    PING_TIMEOUT = 10
     RECONNECT_MAX_DELAY = 60
-    # Default reconnect attempts
     RECONNECT_MAX_TRIES = 50
-    # Default root API endpoint. It's possible to
-    # override this by passing the `root` parameter during initialisation.
     ROOT_URI = "wss://ws.kite.trade"
 
-    # Available streaming modes.
+    # Streaming modes
     MODE_FULL = "full"
     MODE_QUOTE = "quote"
     MODE_LTP = "ltp"
 
-    # Flag to set if its first connect
-    _is_first_connect = True
-
-    # Available actions.
-    _message_code = 11
+    # Message constants
     _message_subscribe = "subscribe"
     _message_unsubscribe = "unsubscribe"
     _message_setmode = "mode"
 
-    # Minimum delay which should be set between retries. User can't set less than this
-    _minimum_reconnect_max_delay = 5
-    # Maximum number or retries user can set
-    _maximum_reconnect_max_tries = 300
-
-    def __init__(self, api_key, access_token, debug=False, root=None,
-                 reconnect=True, reconnect_max_tries=RECONNECT_MAX_TRIES, reconnect_max_delay=RECONNECT_MAX_DELAY,
-                 connect_timeout=CONNECT_TIMEOUT):
+    def __init__(
+        self,
+        api_key: str,
+        access_token: str,
+        debug: bool = False,
+        root: Optional[str] = None,
+        reconnect: bool = True,
+        reconnect_max_tries: int = RECONNECT_MAX_TRIES,
+        reconnect_max_delay: int = RECONNECT_MAX_DELAY,
+        connect_timeout: int = CONNECT_TIMEOUT,
+        ping_interval: float = PING_INTERVAL,
+        ping_timeout: float = PING_TIMEOUT,
+    ):
         """
-        Initialise websocket client instance.
+        Initialize WebSocket client.
 
-        - `api_key` is the API key issued to you
-        - `access_token` is the token obtained after the login flow in
-            exchange for the `request_token`. Pre-login, this will default to None,
-            but once you have obtained it, you should
-            persist it in a database or session to pass
-            to the Kite Connect class initialisation for subsequent requests.
-        - `root` is the websocket API end point root. Unless you explicitly
-            want to send API requests to a non-default endpoint, this
-            can be ignored.
-        - `reconnect` is a boolean to enable WebSocket autreconnect in case of network failure/disconnection.
-        - `reconnect_max_delay` in seconds is the maximum delay after which subsequent reconnection interval will become constant. Defaults to 60s and minimum acceptable value is 5s.
-        - `reconnect_max_tries` is maximum number reconnection attempts. Defaults to 50 attempts and maximum up to 300 attempts.
-        - `connect_timeout` in seconds is the maximum interval after which connection is considered as timeout. Defaults to 30s.
+        Args:
+            api_key: API key from Kite Connect
+            access_token: Access token from login flow
+            debug: Enable debug logging
+            root: WebSocket endpoint URL
+            reconnect: Enable auto-reconnection
+            reconnect_max_tries: Maximum reconnection attempts
+            reconnect_max_delay: Maximum delay between reconnections
+            connect_timeout: Connection timeout in seconds
         """
+        self.api_key = api_key
+        self.access_token = access_token
+        self.debug = debug
         self.root = root or self.ROOT_URI
-
-        # Set max reconnect tries
-        if reconnect_max_tries > self._maximum_reconnect_max_tries:
-            log.warning("`reconnect_max_tries` can not be more than {val}. Setting to highest possible value - {val}.".format(
-                val=self._maximum_reconnect_max_tries))
-            self.reconnect_max_tries = self._maximum_reconnect_max_tries
-        else:
-            self.reconnect_max_tries = reconnect_max_tries
-
-        # Set max reconnect delay
-        if reconnect_max_delay < self._minimum_reconnect_max_delay:
-            log.warning("`reconnect_max_delay` can not be less than {val}. Setting to lowest possible value - {val}.".format(
-                val=self._minimum_reconnect_max_delay))
-            self.reconnect_max_delay = self._minimum_reconnect_max_delay
-        else:
-            self.reconnect_max_delay = reconnect_max_delay
-
+        self.reconnect = reconnect
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
+        self.reconnect_max_tries = min(reconnect_max_tries, 300)
+        self.reconnect_max_delay = max(reconnect_max_delay, 5)
         self.connect_timeout = connect_timeout
 
-        self.socket_url = "{root}?api_key={api_key}"\
-            "&access_token={access_token}".format(
-                root=self.root,
-                api_key=api_key,
-                access_token=access_token
+        # Connection state
+        self.ws: Optional[ClientConnection] = None
+        self._running = False
+        self._reconnect_attempts = 0
+        self._last_pong = None
+        self.subscribed_tokens: Dict[int, str] = {}
+
+        # Callbacks - can be sync or async
+        self.on_ticks: Optional[Callable] = None
+        self.on_open: Optional[Callable] = None
+        self.on_close: Optional[Callable] = None
+        self.on_error: Optional[Callable] = None
+        self.on_connect: Optional[Callable] = None
+        self.on_message: Optional[Callable] = None
+        self.on_reconnect: Optional[Callable] = None
+        self.on_noreconnect: Optional[Callable] = None
+        self.on_order_update: Optional[Callable] = None
+
+    def _build_url(self) -> str:
+        """Build WebSocket URL with authentication."""
+        params = {"api_key": self.api_key, "access_token": self.access_token}
+        return f"{self.root}?{urlencode(params)}"
+
+    def _get_user_agent(self) -> str:
+        """Get user agent string."""
+        return f"{__title__}-python/{__version__}"
+
+    async def _call_callback(self, callback: Optional[Callable], *args, **kwargs):
+        """Call callback function (sync or async)."""
+        if callback:
+            try:
+                if iscoroutinefunction(callback):
+                    await callback(*args, **kwargs)
+                else:
+                    callback(*args, **kwargs)
+            except Exception as e:
+                log.error(f"Error in callback: {e}")
+
+    async def connect(self) -> None:
+        """Connect to WebSocket and handle reconnections."""
+        self._running = True
+
+        while self._running:
+            try:
+                await self._connect_once()
+                if not self.reconnect or not self._running:
+                    break
+
+                # Calculate reconnect delay with exponential backoff
+                delay = min(2**self._reconnect_attempts, self.reconnect_max_delay)
+                log.info(
+                    f"Reconnecting in {delay} seconds... (attempt {self._reconnect_attempts + 1})"
+                )
+
+                await self._call_callback(
+                    self.on_reconnect, self._reconnect_attempts + 1
+                )
+                await sleep(delay)
+
+                self._reconnect_attempts += 1
+
+                if self._reconnect_attempts >= self.reconnect_max_tries:
+                    log.error(
+                        f"Maximum reconnection attempts ({self.reconnect_max_tries}) reached"
+                    )
+                    await self._call_callback(self.on_noreconnect)
+                    break
+
+            except KeyboardInterrupt:
+                log.info("Connection interrupted by user")
+                break
+            except Exception as e:
+                log.error(f"Unexpected error: {e}")
+                break
+
+    async def _connect_once(self) -> None:
+        """Single connection attempt."""
+        url = self._build_url()
+        headers = {"User-Agent": self._get_user_agent(), "X-Kite-Version": "3"}
+
+        # SSL context
+        ssl_context = create_default_context()
+
+        try:
+            async with connect(
+                url,
+                extra_headers=headers,
+                ssl=ssl_context,
+                ping_interval=self.PING_INTERVAL,
+                ping_timeout=self.PING_TIMEOUT,
+                close_timeout=self.connect_timeout,
+                max_size=None,
+            ) as websocket:
+                self.ws = websocket
+                log.info("WebSocket connected successfully")
+
+                # Reset reconnect counter on successful connection
+                self._reconnect_attempts = 0
+
+                await self._call_callback(self.on_connect, self)
+                await self._call_callback(self.on_open, self)
+
+                # Resubscribe to existing tokens
+                if self.subscribed_tokens:
+                    await self._resubscribe()
+
+                # Handle messages
+                async for message in websocket:
+                    await self._handle_message(message)
+
+        except ConnectionClosed as e:
+            log.warning(f"WebSocket connection closed: {e}")
+            await self._call_callback(self.on_close, self, e.code, e.reason)
+
+        except Exception as e:
+            log.error(f"WebSocket connection error: {e}")
+            await self._call_callback(self.on_error, self, 0, str(e))
+
+    async def _handle_message(self, message) -> None:
+        """Handle incoming WebSocket message."""
+        try:
+            await self._call_callback(
+                self.on_message, self, message, isinstance(message, bytes)
             )
 
-        # Debug enables logs
-        self.debug = debug
-
-        # Initialize default value for websocket object
-        self.ws = None
-
-        # Placeholders for callbacks.
-        self.on_ticks = None
-        self.on_open = None
-        self.on_close = None
-        self.on_error = None
-        self.on_connect = None
-        self.on_message = None
-        self.on_reconnect = None
-        self.on_noreconnect = None
-
-        # Text message updates
-        self.on_order_update = None
-
-        # List of current subscribed tokens
-        self.subscribed_tokens = {}
-
-    def _create_connection(self, url, **kwargs):
-        """Create a WebSocket client connection."""
-        self.factory = KiteTickerClientFactory(url, **kwargs)
-
-        # Alias for current websocket connection
-        self.ws = self.factory.ws
-
-        self.factory.debug = self.debug
-
-        # Register private callbacks
-        self.factory.on_open = self._on_open
-        self.factory.on_error = self._on_error
-        self.factory.on_close = self._on_close
-        self.factory.on_message = self._on_message
-        self.factory.on_connect = self._on_connect
-        self.factory.on_reconnect = self._on_reconnect
-        self.factory.on_noreconnect = self._on_noreconnect
-
-        self.factory.maxDelay = self.reconnect_max_delay
-        self.factory.maxRetries = self.reconnect_max_tries
-
-    def _user_agent(self):
-        return (__title__ + "-python/").capitalize() + __version__
-
-    def connect(self, threaded=False, disable_ssl_verification=False, proxy=None):
-        """
-        Establish a websocket connection.
-
-        - `threaded` is a boolean indicating if the websocket client has to be run in threaded mode or not
-        - `disable_ssl_verification` disables building ssl context
-        - `proxy` is a dictionary with keys `host` and `port` which denotes the proxy settings
-        """
-        # Custom headers
-        headers = {
-            "X-Kite-Version": "3",  # For version 3
-        }
-
-        # Init WebSocket client factory
-        self._create_connection(self.socket_url,
-                                useragent=self._user_agent(),
-                                proxy=proxy, headers=headers)
-
-        # Set SSL context
-        context_factory = None
-        if self.factory.isSecure and not disable_ssl_verification:
-            context_factory = ssl.ClientContextFactory()
-
-        # Establish WebSocket connection to a server
-        connectWS(self.factory, contextFactory=context_factory, timeout=self.connect_timeout)
-
-        if self.debug:
-            twisted_log.startLogging(sys.stdout)
-
-        # Run in seperate thread of blocking
-        opts = {}
-
-        # Run when reactor is not running
-        if not reactor.running:
-            if threaded:
-                # Signals are not allowed in non main thread by twisted so suppress it.
-                opts["installSignalHandlers"] = False
-                self.websocket_thread = threading.Thread(target=reactor.run, kwargs=opts)
-                self.websocket_thread.daemon = True
-                self.websocket_thread.start()
+            if isinstance(message, bytes):
+                # Binary market data
+                if len(message) > 4 and self.on_ticks:
+                    ticks = self._parse_binary(message)
+                    await self._call_callback(self.on_ticks, self, ticks)
             else:
-                reactor.run(**opts)
+                # Text message
+                await self._parse_text_message(message)
 
-    def is_connected(self):
-        """Check if WebSocket connection is established."""
-        if self.ws and self.ws.state == self.ws.STATE_OPEN:
-            return True
-        else:
+        except Exception as e:
+            log.error(f"Error handling message: {e}")
+
+    async def _parse_text_message(self, message: str) -> None:
+        """Parse text message from WebSocket."""
+        try:
+            data = loads(message)
+
+            # Handle order updates
+            if (
+                data.get("type") == "order"
+                and data.get("data")
+                and self.on_order_update
+            ):
+                await self._call_callback(self.on_order_update, self, data["data"])
+
+            # Handle errors
+            elif data.get("type") == "error":
+                await self._call_callback(self.on_error, self, 0, data.get("data"))
+
+        except JSONDecodeError as e:
+            log.error(f"Failed to parse text message: {e}")
+
+    async def _resubscribe(self) -> None:
+        """Resubscribe to all previously subscribed tokens."""
+        if not self.subscribed_tokens:
+            return
+
+        # Group tokens by mode
+        modes: Dict[str, List[int]] = {}
+        for token, mode in self.subscribed_tokens.items():
+            modes.setdefault(mode, []).append(token)
+
+        # Subscribe and set modes
+        for mode, tokens in modes.items():
+            if mode not in ["full", "quote", "ltp"]:
+                log.warning(f"Unknown mode: {mode}")
+                continue
+            log.debug(f"Resubscribing to {len(tokens)} tokens in {mode} mode")
+            await self.subscribe(tokens)
+            await self.set_mode(mode, tokens)  # pyright: ignore[reportArgumentType]
+
+    async def subscribe(self, instrument_tokens: List[int]) -> bool:
+        """Subscribe to instrument tokens."""
+        if self.ws is None:
             return False
 
-    def _close(self, code=None, reason=None):
-        """Close the WebSocket connection."""
-        if self.ws:
-            self.ws.sendClose(code, reason)
-
-    def close(self, code=None, reason=None):
-        """Close the WebSocket connection."""
-        self.stop_retry()
-        self._close(code, reason)
-
-    def stop(self):
-        """Stop the event loop. Should be used if main thread has to be closed in `on_close` method.
-        Reconnection mechanism cannot happen past this method
-        """
-        reactor.stop()
-
-    def stop_retry(self):
-        """Stop auto retry when it is in progress."""
-        if self.factory:
-            self.factory.stopTrying()
-
-    def subscribe(self, instrument_tokens):
-        """
-        Subscribe to a list of instrument_tokens.
-
-        - `instrument_tokens` is list of instrument instrument_tokens to subscribe
-        """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_subscribe, "v": instrument_tokens}))
-            )
+            message = dumps({"a": self._message_subscribe, "v": instrument_tokens})
+            await self.ws.send(message)
 
+            # Update subscribed tokens
             for token in instrument_tokens:
                 self.subscribed_tokens[token] = self.MODE_QUOTE
 
             return True
+
         except Exception as e:
-            self._close(reason="Error while subscribe: {}".format(str(e)))
-            raise
+            log.error(f"Error subscribing: {e}")
+            await self.close()
+            return False
 
-    def unsubscribe(self, instrument_tokens):
-        """
-        Unsubscribe the given list of instrument_tokens.
+    async def unsubscribe(self, instrument_tokens: List[int]) -> bool:
+        """Unsubscribe from instrument tokens."""
+        if self.ws is None:
+            return False
 
-        - `instrument_tokens` is list of instrument_tokens to unsubscribe.
-        """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_unsubscribe, "v": instrument_tokens}))
-            )
+            message = dumps({"a": self._message_unsubscribe, "v": instrument_tokens})
+            await self.ws.send(message)
 
+            # Remove from subscribed tokens
             for token in instrument_tokens:
-                try:
-                    del (self.subscribed_tokens[token])
-                except KeyError:
-                    pass
+                self.subscribed_tokens.pop(token, None)
 
             return True
+
         except Exception as e:
-            self._close(reason="Error while unsubscribe: {}".format(str(e)))
-            raise
+            log.error(f"Error unsubscribing: {e}")
+            await self.close()
+            return False
 
-    def set_mode(self, mode, instrument_tokens):
-        """
-        Set streaming mode for the given list of tokens.
+    async def set_mode(
+        self, mode: Literal["full", "quote", "ltp"], instrument_tokens: List[int]
+    ) -> bool:
+        """Set streaming mode for instrument tokens."""
+        if self.ws is None:
+            return False
 
-        - `mode` is the mode to set. It can be one of the following class constants:
-            MODE_LTP, MODE_QUOTE, or MODE_FULL.
-        - `instrument_tokens` is list of instrument tokens on which the mode should be applied
-        """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_setmode, "v": [mode, instrument_tokens]}))
+            message = dumps(
+                {"a": self._message_setmode, "v": [mode, instrument_tokens]}
             )
+            await self.ws.send(message)
 
             # Update modes
             for token in instrument_tokens:
                 self.subscribed_tokens[token] = mode
 
             return True
+
         except Exception as e:
-            self._close(reason="Error while setting mode: {}".format(str(e)))
-            raise
+            log.error(f"Error setting mode: {e}")
+            await self.close()
+            return False
 
-    def resubscribe(self):
-        """Resubscribe to all current subscribed tokens."""
-        modes = {}
+    async def close(self) -> None:
+        """Close WebSocket connection."""
+        self._running = False
+        if self.ws:
+            await self.ws.close()
 
-        for token in self.subscribed_tokens:
-            m = self.subscribed_tokens[token]
-
-            if not modes.get(m):
-                modes[m] = []
-
-            modes[m].append(token)
-
-        for mode in modes:
-            if self.debug:
-                log.debug("Resubscribe and set mode: {} - {}".format(mode, modes[mode]))
-
-            self.subscribe(modes[mode])
-            self.set_mode(mode, modes[mode])
-
-    def _on_connect(self, ws, response):
-        self.ws = ws
-        if self.on_connect:
-            self.on_connect(self, response)
-
-    def _on_close(self, ws, code, reason):
-        """Call `on_close` callback when connection is closed."""
-        log.error("Connection closed: {} - {}".format(code, str(reason)))
-
-        if self.on_close:
-            self.on_close(self, code, reason)
-
-    def _on_error(self, ws, code, reason):
-        """Call `on_error` callback when connection throws an error."""
-        log.error("Connection error: {} - {}".format(code, str(reason)))
-
-        if self.on_error:
-            self.on_error(self, code, reason)
-
-    def _on_message(self, ws, payload, is_binary):
-        """Call `on_message` callback when text message is received."""
-        if self.on_message:
-            self.on_message(self, payload, is_binary)
-
-        # If the message is binary, parse it and send it to the callback.
-        if self.on_ticks and is_binary and len(payload) > 4:
-            self.on_ticks(self, self._parse_binary(payload))
-
-        # Parse text messages
-        if not is_binary:
-            self._parse_text_message(payload)
-
-    def _on_open(self, ws):
-        # Resubscribe if its reconnect
-        if not self._is_first_connect:
-            self.resubscribe()
-
-        # Set first connect to false once its connected first time
-        self._is_first_connect = False
-
-        if self.on_open:
-            return self.on_open(self)
-
-    def _on_reconnect(self, attempts_count):
-        if self.on_reconnect:
-            return self.on_reconnect(self, attempts_count)
-
-    def _on_noreconnect(self):
-        if self.on_noreconnect:
-            return self.on_noreconnect(self)
-
-    def _parse_text_message(self, payload):
-        """Parse text message."""
-        # Decode unicode data
-        if not six.PY2 and type(payload) == bytes:
-            payload = payload.decode("utf-8")
-
-        try:
-            data = json.loads(payload)
-        except ValueError:
-            return
-
-        # Order update callback
-        if self.on_order_update and data.get("type") == "order" and data.get("data"):
-            self.on_order_update(self, data["data"])
-
-        # Custom error with websocket error code 0
-        if data.get("type") == "error":
-            self._on_error(self, 0, data.get("data"))
-
-    def _parse_binary(self, bin):
-        """Parse binary data to a (list of) ticks structure."""
-        packets = self._split_packets(bin)  # split data to individual ticks packet
-        data = []
+    def _parse_binary(self, data: bytes) -> List[Dict[str, Any]]:
+        """Parse binary market data into tick structures."""
+        packets = self._split_packets(data)
+        ticks = []
 
         for packet in packets:
-            instrument_token = self._unpack_int(packet, 0, 4)
-            segment = instrument_token & 0xff  # Retrive segment constant from instrument_token
+            if len(packet) < 4:
+                continue
 
-            # Add price divisor based on segment
+            instrument_token = self._unpack_int(packet, 0, 4)
+            segment = instrument_token & 0xFF
+
+            # Price divisor based on segment
             if segment == self.EXCHANGE_MAP["cds"]:
                 divisor = 10000000.0
             elif segment == self.EXCHANGE_MAP["bcd"]:
@@ -733,131 +397,158 @@ class KiteTicker(object):
             else:
                 divisor = 100.0
 
-            # All indices are not tradable
-            tradable = False if segment == self.EXCHANGE_MAP["indices"] else True
+            tradable = segment != self.EXCHANGE_MAP["indices"]
+            tick = {"tradable": tradable, "instrument_token": instrument_token}
 
-            # LTP packets
+            # Parse different packet sizes
             if len(packet) == 8:
-                data.append({
-                    "tradable": tradable,
-                    "mode": self.MODE_LTP,
-                    "instrument_token": instrument_token,
-                    "last_price": self._unpack_int(packet, 4, 8) / divisor
-                })
-            # Indices quote and full mode
-            elif len(packet) == 28 or len(packet) == 32:
-                mode = self.MODE_QUOTE if len(packet) == 28 else self.MODE_FULL
-
-                d = {
-                    "tradable": tradable,
-                    "mode": mode,
-                    "instrument_token": instrument_token,
-                    "last_price": self._unpack_int(packet, 4, 8) / divisor,
-                    "ohlc": {
-                        "high": self._unpack_int(packet, 8, 12) / divisor,
-                        "low": self._unpack_int(packet, 12, 16) / divisor,
-                        "open": self._unpack_int(packet, 16, 20) / divisor,
-                        "close": self._unpack_int(packet, 20, 24) / divisor
+                # LTP mode
+                tick.update(
+                    {
+                        "mode": self.MODE_LTP,
+                        "last_price": self._unpack_int(packet, 4, 8) / divisor,
                     }
-                }
+                )
 
-                # Compute the change price using close price and last price
-                d["change"] = 0
-                if (d["ohlc"]["close"] != 0):
-                    d["change"] = (d["last_price"] - d["ohlc"]["close"]) * 100 / d["ohlc"]["close"]
+            elif len(packet) in (28, 32):
+                # Index quote/full mode
+                tick.update(
+                    {
+                        "mode": self.MODE_FULL
+                        if len(packet) == 32
+                        else self.MODE_QUOTE,
+                        "last_price": self._unpack_int(packet, 4, 8) / divisor,
+                        "ohlc": {
+                            "high": self._unpack_int(packet, 8, 12) / divisor,
+                            "low": self._unpack_int(packet, 12, 16) / divisor,
+                            "open": self._unpack_int(packet, 16, 20) / divisor,
+                            "close": self._unpack_int(packet, 20, 24) / divisor,
+                        },
+                    }
+                )
 
-                # Full mode with timestamp
+                # Calculate change percentage
+                close = tick["ohlc"]["close"]
+                if close != 0:
+                    tick["change"] = (tick["last_price"] - close) * 100 / close
+                else:
+                    tick["change"] = 0
+
+                # Full mode timestamp
                 if len(packet) == 32:
                     try:
-                        timestamp = datetime.fromtimestamp(self._unpack_int(packet, 28, 32))
-                    except Exception:
-                        timestamp = None
+                        tick["exchange_timestamp"] = datetime.fromtimestamp(
+                            self._unpack_int(packet, 28, 32)
+                        )
+                    except (ValueError, OSError):
+                        tick["exchange_timestamp"] = None
 
-                    d["exchange_timestamp"] = timestamp
-
-                data.append(d)
-            # Quote and full mode
-            elif len(packet) == 44 or len(packet) == 184:
-                mode = self.MODE_QUOTE if len(packet) == 44 else self.MODE_FULL
-
-                d = {
-                    "tradable": tradable,
-                    "mode": mode,
-                    "instrument_token": instrument_token,
-                    "last_price": self._unpack_int(packet, 4, 8) / divisor,
-                    "last_traded_quantity": self._unpack_int(packet, 8, 12),
-                    "average_traded_price": self._unpack_int(packet, 12, 16) / divisor,
-                    "volume_traded": self._unpack_int(packet, 16, 20),
-                    "total_buy_quantity": self._unpack_int(packet, 20, 24),
-                    "total_sell_quantity": self._unpack_int(packet, 24, 28),
-                    "ohlc": {
-                        "open": self._unpack_int(packet, 28, 32) / divisor,
-                        "high": self._unpack_int(packet, 32, 36) / divisor,
-                        "low": self._unpack_int(packet, 36, 40) / divisor,
-                        "close": self._unpack_int(packet, 40, 44) / divisor
+            elif len(packet) in (44, 184):
+                # Regular quote/full mode
+                tick.update(
+                    {
+                        "mode": self.MODE_FULL
+                        if len(packet) == 184
+                        else self.MODE_QUOTE,
+                        "last_price": self._unpack_int(packet, 4, 8) / divisor,
+                        "last_traded_quantity": self._unpack_int(packet, 8, 12),
+                        "average_traded_price": self._unpack_int(packet, 12, 16)
+                        / divisor,
+                        "volume_traded": self._unpack_int(packet, 16, 20),
+                        "total_buy_quantity": self._unpack_int(packet, 20, 24),
+                        "total_sell_quantity": self._unpack_int(packet, 24, 28),
+                        "ohlc": {
+                            "open": self._unpack_int(packet, 28, 32) / divisor,
+                            "high": self._unpack_int(packet, 32, 36) / divisor,
+                            "low": self._unpack_int(packet, 36, 40) / divisor,
+                            "close": self._unpack_int(packet, 40, 44) / divisor,
+                        },
                     }
-                }
+                )
 
-                # Compute the change price using close price and last price
-                d["change"] = 0
-                if (d["ohlc"]["close"] != 0):
-                    d["change"] = (d["last_price"] - d["ohlc"]["close"]) * 100 / d["ohlc"]["close"]
+                # Calculate change percentage
+                close = tick["ohlc"]["close"]
+                if close != 0:
+                    tick["change"] = (tick["last_price"] - close) * 100 / close
+                else:
+                    tick["change"] = 0
 
-                # Parse full mode
+                # Full mode additional data
                 if len(packet) == 184:
                     try:
-                        last_trade_time = datetime.fromtimestamp(self._unpack_int(packet, 44, 48))
-                    except Exception:
-                        last_trade_time = None
+                        tick["last_trade_time"] = datetime.fromtimestamp(
+                            self._unpack_int(packet, 44, 48)
+                        )
+                    except (ValueError, OSError):
+                        tick["last_trade_time"] = None
+
+                    tick.update(
+                        {
+                            "oi": self._unpack_int(packet, 48, 52),
+                            "oi_day_high": self._unpack_int(packet, 52, 56),
+                            "oi_day_low": self._unpack_int(packet, 56, 60),
+                        }
+                    )
 
                     try:
-                        timestamp = datetime.fromtimestamp(self._unpack_int(packet, 60, 64))
-                    except Exception:
-                        timestamp = None
+                        tick["exchange_timestamp"] = datetime.fromtimestamp(
+                            self._unpack_int(packet, 60, 64)
+                        )
+                    except (ValueError, OSError):
+                        tick["exchange_timestamp"] = None
 
-                    d["last_trade_time"] = last_trade_time
-                    d["oi"] = self._unpack_int(packet, 48, 52)
-                    d["oi_day_high"] = self._unpack_int(packet, 52, 56)
-                    d["oi_day_low"] = self._unpack_int(packet, 56, 60)
-                    d["exchange_timestamp"] = timestamp
+                    # Market depth
+                    depth = {"buy": [], "sell": []}
+                    for i, pos in enumerate(range(64, len(packet), 12)):
+                        if pos + 12 > len(packet):
+                            break
 
-                    # Market depth entries.
-                    depth = {
-                        "buy": [],
-                        "sell": []
-                    }
+                        entry = {
+                            "quantity": self._unpack_int(packet, pos, pos + 4),
+                            "price": self._unpack_int(packet, pos + 4, pos + 8)
+                            / divisor,
+                            "orders": self._unpack_int(packet, pos + 8, pos + 10, "H"),
+                        }
 
-                    # Compile the market depth lists.
-                    for i, p in enumerate(range(64, len(packet), 12)):
-                        depth["sell" if i >= 5 else "buy"].append({
-                            "quantity": self._unpack_int(packet, p, p + 4),
-                            "price": self._unpack_int(packet, p + 4, p + 8) / divisor,
-                            "orders": self._unpack_int(packet, p + 8, p + 10, byte_format="H")
-                        })
+                        if i < 5:
+                            depth["buy"].append(entry)
+                        else:
+                            depth["sell"].append(entry)
 
-                    d["depth"] = depth
+                    tick["depth"] = depth
 
-                data.append(d)
+            ticks.append(tick)
 
-        return data
+        return ticks
 
-    def _unpack_int(self, bin, start, end, byte_format="I"):
-        """Unpack binary data as unsgined interger."""
-        return struct.unpack(">" + byte_format, bin[start:end])[0]
-
-    def _split_packets(self, bin):
-        """Split the data to individual packets of ticks."""
-        # Ignore heartbeat data.
-        if len(bin) < 2:
+    def _split_packets(self, data: bytes) -> List[bytes]:
+        """Split binary data into individual tick packets."""
+        if len(data) < 2:
             return []
 
-        number_of_packets = self._unpack_int(bin, 0, 2, byte_format="H")
         packets = []
+        packet_count = self._unpack_int(data, 0, 2, "H")
+        pos = 2
 
-        j = 2
-        for i in range(number_of_packets):
-            packet_length = self._unpack_int(bin, j, j + 2, byte_format="H")
-            packets.append(bin[j + 2: j + 2 + packet_length])
-            j = j + 2 + packet_length
+        for _ in range(packet_count):
+            if pos + 2 > len(data):
+                break
+
+            packet_length = self._unpack_int(data, pos, pos + 2, "H")
+            pos += 2
+
+            if pos + packet_length > len(data):
+                break
+
+            packets.append(data[pos : pos + packet_length])
+            pos += packet_length
 
         return packets
+
+    def _unpack_int(
+        self, data: bytes, start: int, end: int, byte_format: Literal["H", "I"] = "I"
+    ) -> int:
+        """Unpack binary data as unsigned integer."""
+        if end > len(data):
+            return 0
+        return unpack(">" + byte_format, data[start:end])[0]

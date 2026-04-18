@@ -1,45 +1,40 @@
 # coding: utf-8
 
 # import pytest
-import utils
+from kiteconnect.types import Variety, Product, OrderType, Validity
+from kiteconnect import KiteConnect
+from tests.helpers import utils
 import time
 import warnings
 # import kiteconnect.exceptions as ex
 
-params = {
-    "exchange": "NSE",
-    "tradingsymbol": "RELIANCE",
-    "transaction_type": "BUY",
-    "quantity": 1
-}
+params = {"exchange": "NSE", "tradingsymbol": "RELIANCE", "transaction_type": "BUY", "quantity": 1}
 
 
 def is_pending_order(status):
     """Check if the status is pending order status."""
     status = status.upper()
-    if ("COMPLETE" in status or "REJECT" in status or "CANCEL" in status):
+    if "COMPLETE" in status or "REJECT" in status or "CANCEL" in status:
         return False
     return True
 
 
-def setup_order_place(kiteconnect,
-                      variety,
-                      product,
-                      order_type,
-                      diff_constant=0.01,
-                      price_diff=1,
-                      price=None,
-                      validity=None,
-                      disclosed_quantity=None,
-                      trigger_price=None,
-                      tag="itest"):
+def setup_order_place(
+    kiteconnect: KiteConnect,
+    variety: Variety,
+    product: Product,
+    order_type: OrderType,
+    diff_constant: float = 0.01,
+    price_diff: float = 1,
+    price: float | None = None,
+    validity: Validity | None = None,
+    disclosed_quantity: int | None = None,
+    trigger_price: float | None = None,
+    tag: str | None = "itest",
+):
     """Place an order with custom fields enabled. Prices are calculated from live ltp and offset based
     on `price_diff` and `diff_constant.`"""
-    updated_params = utils.merge_dicts(params, {
-        "product": product,
-        "variety": variety,
-        "order_type": order_type
-    })
+    updated_params = utils.merge_dicts(params, {"product": product, "variety": variety, "order_type": order_type})
 
     # NOT WORKING CURRENTLY
     # Raises exception since no price set
@@ -72,7 +67,7 @@ def setup_order_place(kiteconnect,
     return (updated_params, order_id, order)
 
 
-def cleanup_orders(kiteconnect, order_id=None):
+def cleanup_orders(kiteconnect: KiteConnect, order_id: str):
     """Cleanup all pending orders and exit position for test symbol."""
     order = kiteconnect.order_history(order_id)
     status = order[-1]["status"].upper()
@@ -89,26 +84,27 @@ def cleanup_orders(kiteconnect, order_id=None):
     elif "COMPLETE" in status:
         positions = kiteconnect.positions()
         for p in positions["net"]:
-            if (p["tradingsymbol"] == tradingsymbol and
-                p["exchange"] == exchange and
-                p["product"] == product and
-                p["quantity"] != 0 and
-                    p["product"] not in [kiteconnect.PRODUCT_BO, kiteconnect.PRODUCT_CO]):
-
+            if (
+                p["tradingsymbol"] == tradingsymbol
+                and p["exchange"] == exchange
+                and p["product"] == product
+                and p["quantity"] != 0
+                and p["product"] != Product.CO
+            ):
                 updated_params = {
                     "tradingsymbol": p["tradingsymbol"],
                     "exchange": p["exchange"],
                     "transaction_type": "BUY" if p["quantity"] < 0 else "SELL",
                     "quantity": abs(p["quantity"]),
                     "product": p["product"],
-                    "variety": kiteconnect.VARIETY_REGULAR,
-                    "order_type": kiteconnect.ORDER_TYPE_MARKET
+                    "variety": Variety.REGULAR,
+                    "order_type": OrderType.MARKET,
                 }
 
                 kiteconnect.place_order(**updated_params)
 
-    # If order is complete and CO/BO order then exit the orde
-    if "COMPLETE" in status and variety in [kiteconnect.VARIETY_BO, kiteconnect.VARIETY_CO]:
+    # If order is complete and CO/BO order then exit the order
+    if "COMPLETE" in status and variety == Variety.CO:
         orders = kiteconnect.orders()
         leg_order_id = None
         for o in orders:
@@ -123,17 +119,18 @@ def cleanup_orders(kiteconnect, order_id=None):
 # Order place tests
 #####################
 
-def test_place_order_market_regular(kiteconnect):
+
+def test_place_order_market_regular(kiteconnect: KiteConnect):
     """Place regular marker order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_REGULAR,
-        order_type=kiteconnect.ORDER_TYPE_MARKET
+        product=Product.MIS,
+        variety=Variety.REGULAR,
+        order_type=OrderType.MARKET,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_MIS
-    assert order[-1]["variety"] == kiteconnect.VARIETY_REGULAR
+    assert order[-1]["product"] == Product.MIS
+    assert order[-1]["variety"] == Variety.REGULAR
 
     try:
         cleanup_orders(kiteconnect, order_id)
@@ -141,18 +138,18 @@ def test_place_order_market_regular(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_limit_regular(kiteconnect):
+def test_place_order_limit_regular(kiteconnect: KiteConnect):
     """Place regular limit order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_REGULAR,
-        order_type=kiteconnect.ORDER_TYPE_LIMIT,
-        price=True
+        product=Product.MIS,
+        variety=Variety.REGULAR,
+        order_type=OrderType.LIMIT,
+        price=True,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_MIS
-    assert order[-1]["variety"] == kiteconnect.VARIETY_REGULAR
+    assert order[-1]["product"] == Product.MIS
+    assert order[-1]["variety"] == Variety.REGULAR
 
     try:
         cleanup_orders(kiteconnect, order_id)
@@ -160,19 +157,19 @@ def test_place_order_limit_regular(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_sl_regular(kiteconnect):
+def test_place_order_sl_regular(kiteconnect: KiteConnect):
     """Place regular SL order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_REGULAR,
-        order_type=kiteconnect.ORDER_TYPE_SL,
+        product=Product.MIS,
+        variety=Variety.REGULAR,
+        order_type=OrderType.SL,
         price=True,
-        trigger_price=True
+        trigger_price=True,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_MIS
-    assert order[-1]["variety"] == kiteconnect.VARIETY_REGULAR
+    assert order[-1]["product"] == Product.MIS
+    assert order[-1]["variety"] == Variety.REGULAR
     assert order[-1]["trigger_price"]
     assert order[-1]["price"]
 
@@ -182,20 +179,20 @@ def test_place_order_sl_regular(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_slm_regular(kiteconnect):
+def test_place_order_slm_regular(kiteconnect: KiteConnect):
     """Place regular SL-M order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_REGULAR,
-        order_type=kiteconnect.ORDER_TYPE_SLM,
-        trigger_price=True
+        product=Product.MIS,
+        variety=Variety.REGULAR,
+        order_type=OrderType.SLM,
+        trigger_price=True,
     )
 
     assert order[-1]["trigger_price"]
     assert order[-1]["price"] == 0
-    assert order[-1]["product"] == kiteconnect.PRODUCT_MIS
-    assert order[-1]["variety"] == kiteconnect.VARIETY_REGULAR
+    assert order[-1]["product"] == Product.MIS
+    assert order[-1]["variety"] == Variety.REGULAR
 
     try:
         cleanup_orders(kiteconnect, order_id)
@@ -203,15 +200,18 @@ def test_place_order_slm_regular(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_tag(kiteconnect):
+def test_place_order_tag(kiteconnect: KiteConnect):
     """Send custom tag and get it in orders."""
     tag = "mytag"
-    updated_params = utils.merge_dicts(params, {
-        "product": kiteconnect.PRODUCT_MIS,
-        "variety": kiteconnect.VARIETY_REGULAR,
-        "order_type": kiteconnect.ORDER_TYPE_MARKET,
-        "tag": tag
-    })
+    updated_params = utils.merge_dicts(
+        params,
+        {
+            "product": Product.MIS,
+            "variety": Variety.REGULAR,
+            "order_type": OrderType.MARKET,
+            "tag": tag,
+        },
+    )
 
     order_id = kiteconnect.place_order(**updated_params)
     order_info = kiteconnect.order_history(order_id=order_id)
@@ -223,18 +223,18 @@ def test_place_order_tag(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_co_market(kiteconnect):
+def test_place_order_co_market(kiteconnect: KiteConnect):
     """Place market CO order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_CO,
-        order_type=kiteconnect.ORDER_TYPE_MARKET,
-        trigger_price=True
+        product=Product.MIS,
+        variety=Variety.CO,
+        order_type=OrderType.MARKET,
+        trigger_price=True,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_CO
-    assert order[-1]["variety"] == kiteconnect.VARIETY_CO
+    assert order[-1]["product"] == Product.CO
+    assert order[-1]["variety"] == Variety.CO
 
     try:
         cleanup_orders(kiteconnect, order_id)
@@ -242,37 +242,36 @@ def test_place_order_co_market(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_place_order_co_limit(kiteconnect):
+def test_place_order_co_limit(kiteconnect: KiteConnect):
     """Place LIMIT co order."""
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_CO,
-        order_type=kiteconnect.ORDER_TYPE_LIMIT,
-        trigger_price=True
+        product=Product.MIS,
+        variety=Variety.CO,
+        order_type=OrderType.LIMIT,
+        trigger_price=True,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_CO
-    assert order[-1]["variety"] == kiteconnect.VARIETY_CO
+    assert order[-1]["product"] == Product.CO
+    assert order[-1]["variety"] == Variety.CO
 
     try:
         cleanup_orders(kiteconnect, order_id)
     except Exception as e:
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
+
 
 # Regular order modify and cancel
 ################################
 
 
-def setup_order_modify_cancel(kiteconnect, variety):
+def setup_order_modify_cancel(kiteconnect: KiteConnect, variety: Variety):
     symbol = params["exchange"] + ":" + params["tradingsymbol"]
     ltp = kiteconnect.ltp(symbol)
 
-    updated_params = utils.merge_dicts(params, {
-        "product": kiteconnect.PRODUCT_MIS,
-        "variety": variety,
-        "order_type": kiteconnect.ORDER_TYPE_LIMIT
-    })
+    updated_params = utils.merge_dicts(
+        params, {"product": Product.MIS, "variety": variety, "order_type": OrderType.LIMIT}
+    )
 
     diff = ltp[symbol]["last_price"] * 0.01
     updated_params["price"] = ltp[symbol]["last_price"] - (diff - (diff % 1))
@@ -290,9 +289,9 @@ def setup_order_modify_cancel(kiteconnect, variety):
     return (updated_params, order_id, order)
 
 
-def test_order_cancel_regular(kiteconnect):
+def test_order_cancel_regular(kiteconnect: KiteConnect):
     """Regular order cancel."""
-    setup = setup_order_modify_cancel(kiteconnect, kiteconnect.VARIETY_REGULAR)
+    setup = setup_order_modify_cancel(kiteconnect, Variety.REGULAR)
     if setup:
         updated_params, order_id, order = setup
     else:
@@ -312,9 +311,9 @@ def test_order_cancel_regular(kiteconnect):
         warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
 
 
-def test_order_modify_limit_regular(kiteconnect):
+def test_order_modify_limit_regular(kiteconnect: KiteConnect):
     """Modify limit regular."""
-    setup = setup_order_modify_cancel(kiteconnect, kiteconnect.VARIETY_REGULAR)
+    setup = setup_order_modify_cancel(kiteconnect, Variety.REGULAR)
     if setup:
         updated_params, order_id, order = setup
     else:
@@ -335,11 +334,11 @@ def test_order_modify_limit_regular(kiteconnect):
     try:
         cleanup_orders(kiteconnect, order_id)
     except Exception as e:
-        warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
+        warnings.warn(UserWarning(f"Error while cleaning up orders: {e}"))
 
 
-def test_order_cancel_amo(kiteconnect):
-    setup = setup_order_modify_cancel(kiteconnect, kiteconnect.VARIETY_AMO)
+def test_order_cancel_amo(kiteconnect: KiteConnect):
+    setup = setup_order_modify_cancel(kiteconnect, Variety.AMO)
     if setup:
         updated_params, order_id, order = setup
     else:
@@ -356,11 +355,11 @@ def test_order_cancel_amo(kiteconnect):
     try:
         cleanup_orders(kiteconnect, order_id)
     except Exception as e:
-        warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
+        warnings.warn(UserWarning(f"Error while cleaning up orders: {e}"))
 
 
-def test_order_modify_limit_amo(kiteconnect):
-    setup = setup_order_modify_cancel(kiteconnect, kiteconnect.VARIETY_AMO)
+def test_order_modify_limit_amo(kiteconnect: KiteConnect):
+    setup = setup_order_modify_cancel(kiteconnect, Variety.AMO)
     if setup:
         updated_params, order_id, order = setup
     else:
@@ -381,23 +380,24 @@ def test_order_modify_limit_amo(kiteconnect):
     try:
         cleanup_orders(kiteconnect, order_id)
     except Exception as e:
-        warnings.warn(UserWarning("Error while cleaning up orders: {}".format(e)))
+        warnings.warn(UserWarning(f"Error while cleaning up orders: {e}"))
+
 
 # CO order modify/cancel and exit
 #################################
 
 
-def test_exit_order_co_market_leg(kiteconnect):
+def test_exit_order_co_market_leg(kiteconnect: KiteConnect):
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_CO,
-        order_type=kiteconnect.ORDER_TYPE_MARKET,
-        trigger_price=True
+        product=Product.MIS,
+        variety=Variety.CO,
+        order_type=OrderType.MARKET,
+        trigger_price=True,
     )
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_CO
-    assert order[-1]["variety"] == kiteconnect.VARIETY_CO
+    assert order[-1]["product"] == Product.CO
+    assert order[-1]["variety"] == Variety.CO
 
     status = order[-1]["status"]
     if "COMPLETE" not in status:
@@ -411,21 +411,21 @@ def test_exit_order_co_market_leg(kiteconnect):
         if o["parent_order_id"] == order_id:
             leg_order = o
             exit
-
-    kiteconnect.exit_order(variety=kiteconnect.VARIETY_CO, order_id=leg_order["order_id"], parent_order_id=order_id)
+    assert leg_order is not None
+    kiteconnect.exit_order(variety=Variety.CO, order_id=leg_order["order_id"], parent_order_id=order_id)
     time.sleep(0.5)
     leg_order_info = kiteconnect.order_history(order_id=leg_order["order_id"])
     assert not is_pending_order(leg_order_info[-1]["status"])
 
 
-def test_cancel_order_co_limit(kiteconnect):
+def test_cancel_order_co_limit(kiteconnect: KiteConnect):
     updated_params, order_id, order = setup_order_place(
         kiteconnect=kiteconnect,
-        product=kiteconnect.PRODUCT_MIS,
-        variety=kiteconnect.VARIETY_CO,
-        order_type=kiteconnect.ORDER_TYPE_LIMIT,
+        product=Product.MIS,
+        variety=Variety.CO,
+        order_type=OrderType.LIMIT,
         trigger_price=True,
-        price=True
+        price=True,
     )
 
     status = order[-1]["status"]
@@ -433,10 +433,10 @@ def test_cancel_order_co_limit(kiteconnect):
         warnings.warn(UserWarning("Order is not pending with status: ", status))
         return
 
-    assert order[-1]["product"] == kiteconnect.PRODUCT_CO
-    assert order[-1]["variety"] == kiteconnect.VARIETY_CO
+    assert order[-1]["product"] == Product.CO
+    assert order[-1]["variety"] == Variety.CO
 
-    kiteconnect.cancel_order(variety=kiteconnect.VARIETY_CO, order_id=order_id)
+    kiteconnect.cancel_order(variety=Variety.CO, order_id=order_id)
     time.sleep(0.5)
     updated_order = kiteconnect.order_history(order_id=order_id)
     assert not is_pending_order(updated_order[-1]["status"])

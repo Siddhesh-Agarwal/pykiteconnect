@@ -1,5 +1,6 @@
 # coding: utf-8
 """Ticker tests"""
+
 import six
 import json
 from mock import Mock
@@ -10,13 +11,12 @@ from autobahn.websocket.protocol import WebSocketProtocol
 
 
 class TestTicker:
-
     def test_autoping(self, protocol):
         protocol.autoPingInterval = 1
         protocol.websocket_protocols = [Mock()]
         protocol.websocket_extensions = []
         protocol._onOpen = lambda: None
-        protocol._wskey = '0' * 24
+        protocol._wskey = "0" * 24
         protocol.peer = Mock()
 
         # usually provided by the Twisted or asyncio specific

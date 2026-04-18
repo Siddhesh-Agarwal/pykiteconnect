@@ -30,7 +30,8 @@ PORT = 5010
 HOST = "127.0.0.1"
 
 
-def serializer(obj): return isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
+def serializer(obj):
+    return isinstance(obj, (date, datetime, Decimal)) and str(obj)  # noqa
 
 
 # Kite Connect App settings. Go to https://developers.kite.trade/apps/
@@ -68,8 +69,7 @@ login_template = """
 
 
 def get_kite_client():
-    """Returns a kite client object
-    """
+    """Returns a kite client object"""
     kite = KiteConnect(api_key=kite_api_key)
     if "access_token" in session:
         kite.set_access_token(session["access_token"])
@@ -79,10 +79,7 @@ def get_kite_client():
 @app.route("/")
 def index():
     return index_template.format(
-        api_key=kite_api_key,
-        redirect_url=redirect_url,
-        console_url=console_url,
-        login_url=login_url
+        api_key=kite_api_key, redirect_url=redirect_url, console_url=console_url, login_url=login_url
     )
 
 
@@ -102,13 +99,7 @@ def login():
     session["access_token"] = data["access_token"]
 
     return login_template.format(
-        access_token=data["access_token"],
-        user_data=json.dumps(
-            data,
-            indent=4,
-            sort_keys=True,
-            default=serializer
-        )
+        access_token=data["access_token"], user_data=json.dumps(data, indent=4, sort_keys=True, default=serializer)
     )
 
 

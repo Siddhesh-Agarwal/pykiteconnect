@@ -24,7 +24,7 @@ def test_positions(kiteconnect):
         content_type="application/json"
     )
     positions = kiteconnect.positions()
-    assert type(positions) == dict
+    assert isinstance(positions, dict)
     assert "day" in positions
     assert "net" in positions
 
@@ -39,7 +39,7 @@ def test_holdings(kiteconnect):
         content_type="application/json"
     )
     holdings = kiteconnect.holdings()
-    assert type(holdings) == list
+    assert isinstance(holdings, list)
 
 
 @responses.activate
@@ -52,7 +52,7 @@ def test_auction_instruments(kiteconnect):
         content_type="application/json"
     )
     auction_inst = kiteconnect.get_auction_instruments()
-    assert type(auction_inst) == list
+    assert isinstance(auction_inst, list)
 
 
 @responses.activate
@@ -65,7 +65,7 @@ def test_margins(kiteconnect):
         content_type="application/json"
     )
     margins = kiteconnect.margins()
-    assert type(margins) == dict
+    assert isinstance(margins, dict)
     assert kiteconnect.MARGIN_EQUITY in margins
     assert kiteconnect.MARGIN_COMMODITY in margins
 
@@ -80,7 +80,7 @@ def test_profile(kiteconnect):
         content_type="application/json"
     )
     profile = kiteconnect.profile()
-    assert type(profile) == dict
+    assert isinstance(profile, dict)
 
 
 @responses.activate
@@ -98,7 +98,7 @@ def test_margins_segmentwise(kiteconnect):
         content_type="application/json"
     )
     commodity = kiteconnect.margins(segment=kiteconnect.MARGIN_COMMODITY)
-    assert type(commodity) == dict
+    assert isinstance(commodity, dict)
 
 
 @responses.activate
@@ -111,7 +111,7 @@ def test_orders(kiteconnect):
         content_type="application/json"
     )
     orders = kiteconnect.orders()
-    assert type(orders) == list
+    assert isinstance(orders, list)
 
 
 @responses.activate
@@ -125,7 +125,7 @@ def test_order_history(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.order_history(order_id="abc123")
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -180,7 +180,7 @@ def test_trades(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.trades()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -194,7 +194,7 @@ def test_order_trades(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.order_trades(order_id="abc123")
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -207,7 +207,7 @@ def test_instruments(kiteconnect):
         content_type="text/csv"
     )
     trades = kiteconnect.instruments()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -221,7 +221,7 @@ def test_instruments_exchangewise(kiteconnect):
         content_type="text/csv"
     )
     trades = kiteconnect.instruments(exchange=kiteconnect.EXCHANGE_NSE)
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -234,7 +234,7 @@ def test_mf_orders(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.mf_orders()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -248,7 +248,7 @@ def test_mf_individual_order(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.mf_orders(order_id="abc123")
-    assert type(trades) == dict
+    assert isinstance(trades, dict)
 
 
 @responses.activate
@@ -261,7 +261,7 @@ def test_mf_sips(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.mf_sips()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -275,7 +275,7 @@ def test_mf_individual_sip(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.mf_sips(sip_id="abc123")
-    assert type(trades) == dict
+    assert isinstance(trades, dict)
 
 
 @responses.activate
@@ -288,7 +288,7 @@ def test_mf_holdings(kiteconnect):
         content_type="application/json"
     )
     trades = kiteconnect.mf_holdings()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -301,7 +301,7 @@ def test_mf_instruments(kiteconnect):
         content_type="text/csv"
     )
     trades = kiteconnect.mf_instruments()
-    assert type(trades) == list
+    assert isinstance(trades, list)
 
 
 @responses.activate
@@ -314,7 +314,7 @@ def test_get_gtts(kiteconnect):
         content_type="application/json"
     )
     gtts = kiteconnect.get_gtts()
-    assert type(gtts) == list
+    assert isinstance(gtts, list)
 
 
 @responses.activate

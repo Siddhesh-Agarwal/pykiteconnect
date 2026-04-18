@@ -195,7 +195,7 @@ class KiteConnect:
         self.session_expiry_hook = None
         self.disable_ssl = disable_ssl
         self.access_token = access_token
-        self.proxies = proxies if proxies else {}
+        self.proxies = proxies or {}
 
         self.root = root or self._default_root_uri
         self.timeout = timeout or self._default_timeout
@@ -235,7 +235,7 @@ class KiteConnect:
 
     def login_url(self):
         """Get the remote login url to which a user should be redirected to initiate the login flow."""
-        return "%s?api_key=%s&v=%s" % (self._default_login_uri, self.api_key, self.kite_header_version)
+        return f"{self._default_login_uri}?api_key={self.api_key}&v={self.kite_header_version}"
 
     def generate_session(self, request_token, api_secret):
         """Generate user session details like `access_token` etc by exchanging `request_token`.
@@ -387,9 +387,9 @@ class KiteConnect:
 
     def _format_response(self, data):
         """Parse and format responses."""
-        if type(data) == list:
+        if isinstance(data, list):
             _list = data
-        elif type(data) == dict:
+        elif isinstance(data, dict):
             _list = [data]
 
         for item in _list:
@@ -406,7 +406,7 @@ class KiteConnect:
                 if item.get(field) and len(item[field]) == 19:
                     item[field] = dateutil.parser.parse(item[field])
 
-        return _list[0] if type(data) == dict else _list
+        return _list[0] if isinstance(data, dict) else _list
 
     # orderbook and tradebook
     def orders(self):
@@ -559,7 +559,7 @@ class KiteConnect:
         ins = list(instruments)
 
         # If first element is a list then accept it as instruments list for legacy reason
-        if len(instruments) > 0 and type(instruments[0]) == list:
+        if len(instruments) > 0 and isinstance(instruments[0], list):
             ins = instruments[0]
 
         data = self._get("market.quote", params={"i": ins})
@@ -573,7 +573,7 @@ class KiteConnect:
         ins = list(instruments)
 
         # If first element is a list then accept it as instruments list for legacy reason
-        if len(instruments) > 0 and type(instruments[0]) == list:
+        if len(instruments) > 0 and isinstance(instruments[0], list):
             ins = instruments[0]
 
         return self._get("market.quote.ohlc", params={"i": ins})
@@ -586,7 +586,7 @@ class KiteConnect:
         ins = list(instruments)
 
         # If first element is a list then accept it as instruments list for legacy reason
-        if len(instruments) > 0 and type(instruments[0]) == list:
+        if len(instruments) > 0 and isinstance(instruments[0], list):
             ins = instruments[0]
 
         return self._get("market.quote.ltp", params={"i": ins})
@@ -607,9 +607,9 @@ class KiteConnect:
         """
         date_string_format = "%Y-%m-%d %H:%M:%S"
         from_date_string = (
-            from_date.strftime(date_string_format) if type(from_date) == datetime.datetime else from_date
+            from_date.strftime(date_string_format) if isinstance(from_date, datetime.datetime) else from_date
         )
-        to_date_string = to_date.strftime(date_string_format) if type(to_date) == datetime.datetime else to_date
+        to_date_string = to_date.strftime(date_string_format) if isinstance(to_date, datetime.datetime) else to_date
 
         data = self._get(
             "market.historical",
@@ -647,7 +647,7 @@ class KiteConnect:
         ins = list(instruments)
 
         # If first element is a list then accept it as instruments list for legacy reason
-        if len(instruments) > 0 and type(instruments[0]) == list:
+        if len(instruments) > 0 and isinstance(instruments[0], list):
             ins = instruments[0]
 
         return self._get(
@@ -664,7 +664,7 @@ class KiteConnect:
 
     def _get_gtt_payload(self, trigger_type, tradingsymbol, exchange, trigger_values, last_price, orders):
         """Get GTT payload"""
-        if type(trigger_values) != list:
+        if not isinstance(trigger_values, list):
             raise ex.InputException("invalid type for `trigger_values`")
         if trigger_type == self.GTT_TYPE_SINGLE and len(trigger_values) != 1:
             raise ex.InputException("invalid `trigger_values` for single leg order type")
@@ -785,7 +785,7 @@ class KiteConnect:
         # decode to string for Python 3
         d = data
         # Decode unicode data
-        if not PY2 and type(d) == bytes:
+        if not PY2 and isinstance(d, bytes):
             d = data.decode("utf-8").strip()
 
         records = []
@@ -809,7 +809,7 @@ class KiteConnect:
     def _parse_mf_instruments(self, data):
         # decode to string for Python 3
         d = data
-        if not PY2 and type(d) == bytes:
+        if not PY2 and isinstance(d, bytes):
             d = data.decode("utf-8").strip()
 
         records = []
@@ -875,9 +875,7 @@ class KiteConnect:
             headers["Authorization"] = f"token {auth_header}"
 
         if self.debug:
-            log.debug(
-                f"Request: {method} {url} {params} {headers}"
-            )
+            log.debug(f"Request: {method} {url} {params} {headers}")
 
         # prepare url query params
         if method in ["GET", "DELETE"]:
@@ -908,9 +906,7 @@ class KiteConnect:
             try:
                 data = r.json()
             except ValueError:
-                raise ex.DataException(
-                    f"Couldn't parse the JSON response received from the server: {r.content}"
-                )
+                raise ex.DataException(f"Couldn't parse the JSON response received from the server: {r.content}")
 
             # api error
             if data.get("status") == "error" or data.get("error_type"):

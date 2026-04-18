@@ -78,6 +78,7 @@ exclude=[
 ]
 line-length = 119
 target-version = "py311"
+ignore = ["E501"]
 
 [tool.ruff.lint]
-select = ["D", "E", "F", "W", "RUF", "UP", "I"]
+select = ["E", "F", "W", "PERF", "UP", "I", "RUF", "FURB","TRY"]

@@ -76,13 +76,13 @@ def test_margins(kiteconnect):
 def test_margins_segmentwise(kiteconnect):
     """Test margins for individual segments."""
     commodity = kiteconnect.margins(segment=kiteconnect.MARGIN_COMMODITY)
-    assert type(commodity) == dict
+    assert isinstance(commodity, dict)
 
 
 def test_orders(kiteconnect):
     """Test orders get."""
     orders = kiteconnect.orders()
-    assert type(orders) == list
+    assert isinstance(orders, list)
 
 
 def test_order_history(kiteconnect):

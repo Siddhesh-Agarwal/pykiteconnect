@@ -78,15 +78,15 @@ def assert_responses(inp, sample):
     # Type check only if its a list or dict
     # Issue with checking all types are a float value can be inferred as int and
     # in some responses it will None instrad of empty string
-    if type(sample) in [list, dict]:
+    if isinstance(sample, (list, dict)):
         assert type(inp) == type(sample)
 
     # If its a list then just check the first element if its available
-    if type(inp) == list and len(inp) > 0:
+    if isinstance(inp, list) and len(inp) > 0:
         assert_responses(inp[0], sample[0])
 
     # If its a dict then iterate individual keys to test
-    if type(sample) == dict:
+    if isinstance(sample, dict):
         for key in sample.keys():
             assert_responses(inp[key], sample[key])
 

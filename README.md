@@ -98,7 +98,8 @@ kite.set_access_token(data["access_token"])
 try:
     order_id = kite.place_order(tradingsymbol="INFY",
                                 exchange=kite.EXCHANGE_NSE,
-                                transaction_type=kite.TRANSACTION_TYPE_BUY,
+                                transaction_
+                                =kite.TRANSACTION_TYPE_BUY,
                                 quantity=1,
                                 variety=kite.VARIETY_AMO,
                                 order_type=kite.ORDER_TYPE_MARKET,

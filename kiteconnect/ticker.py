@@ -124,9 +124,7 @@ class KiteTickerClientProtocol(WebSocketClientProtocol):
             last_pong_diff = time.time() - self._last_pong_time
             if last_pong_diff > (2 * self.PING_INTERVAL):
                 if self.factory.debug:
-                    log.debug(
-                        f"Last pong was {last_pong_diff} seconds ago. So dropping connection to reconnect."
-                    )
+                    log.debug(f"Last pong was {last_pong_diff} seconds ago. So dropping connection to reconnect.")
                 # drop existing connection to avoid ghost connection
                 self.dropConnection(abort=True)
 
@@ -168,7 +166,7 @@ class KiteTickerClientFactory(WebSocketClientFactory, ReconnectingClientFactory)
         """On connection failure (When connect request fails)"""
         if self.retries > 0:
             log.error(
-                f"Retrying connection. Retry attempt count: {self.retries}. Next retry in around: {int(round(self.delay))} seconds"
+                f"Retrying connection. Retry attempt count: {self.retries}. Next retry in around: {round(self.delay)} seconds"
             )
 
             # on reconnect callback
@@ -692,7 +690,7 @@ class KiteTicker:
     def _parse_text_message(self, payload):
         """Parse text message."""
         # Decode unicode data
-        if not six.PY2 and type(payload) == bytes:
+        if not six.PY2 and isinstance(payload, bytes):
             payload = payload.decode("utf-8")
 
         try:

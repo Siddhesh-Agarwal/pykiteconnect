@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-connect.py
+"""connect.py
 
 API wrapper for Kite Connect REST APIs.
 
@@ -8,26 +6,27 @@ API wrapper for Kite Connect REST APIs.
 :license: see LICENSE for details.
 """
 
-from six import StringIO, PY2
-from six.moves.urllib.parse import urljoin
 import csv
-import json
-import dateutil.parser
-import hashlib
-import logging
 import datetime
-import requests
+import hashlib
+import json
+import logging
 import warnings
 
-from .__version__ import __version__, __title__
+import dateutil.parser
+import requests
+from six import PY2, StringIO
+from six.moves.urllib.parse import urljoin
+
 import kiteconnect.exceptions as ex
+
+from .__version__ import __title__, __version__
 
 log = logging.getLogger(__name__)
 
 
-class KiteConnect(object):
-    """
-    The Kite Connect API wrapper class.
+class KiteConnect:
+    """The Kite Connect API wrapper class.
 
     In production, you may initialise a single instance of this class per `api_key`.
     """
@@ -170,8 +169,7 @@ class KiteConnect(object):
         pool=None,
         disable_ssl=False,
     ):
-        """
-        Initialise a new Kite Connect client instance.
+        """Initialise a new Kite Connect client instance.
 
         - `api_key` is the key issued to you
         - `access_token` is the token obtained after the login flow in
@@ -213,8 +211,7 @@ class KiteConnect(object):
         requests.packages.urllib3.disable_warnings()
 
     def set_session_expiry_hook(self, method):
-        """
-        Set a callback hook for session (`TokenError` -- timeout, expiry etc.) errors.
+        """Set a callback hook for session (`TokenError` -- timeout, expiry etc.) errors.
 
         An `access_token` (login session) can become invalid for a number of
         reasons, but it doesn't make sense for the client to
@@ -241,8 +238,7 @@ class KiteConnect(object):
         return "%s?api_key=%s&v=%s" % (self._default_login_uri, self.api_key, self.kite_header_version)
 
     def generate_session(self, request_token, api_secret):
-        """
-        Generate user session details like `access_token` etc by exchanging `request_token`.
+        """Generate user session details like `access_token` etc by exchanging `request_token`.
         Access token is automatically set if the session is retrieved successfully.
 
         Do the token exchange with the `request_token` obtained after the login flow,
@@ -269,8 +265,7 @@ class KiteConnect(object):
         return resp
 
     def invalidate_access_token(self, access_token=None):
-        """
-        Kill the session by invalidating the access token.
+        """Kill the session by invalidating the access token.
 
         - `access_token` to invalidate. Default is the active `access_token`.
         """
@@ -278,8 +273,7 @@ class KiteConnect(object):
         return self._delete("api.token.invalidate", params={"api_key": self.api_key, "access_token": access_token})
 
     def renew_access_token(self, refresh_token, api_secret):
-        """
-        Renew expired `refresh_token` using valid `refresh_token`.
+        """Renew expired `refresh_token` using valid `refresh_token`.
 
         - `refresh_token` is the token obtained from previous successful login flow.
         - `api_secret` is the API api_secret issued with the API key.
@@ -297,8 +291,7 @@ class KiteConnect(object):
         return resp
 
     def invalidate_refresh_token(self, refresh_token):
-        """
-        Invalidate refresh token.
+        """Invalidate refresh token.
 
         - `refresh_token` is the token which is used to renew access token.
         """
@@ -394,7 +387,6 @@ class KiteConnect(object):
 
     def _format_response(self, data):
         """Parse and format responses."""
-
         if type(data) == list:
             _list = data
         elif type(data) == dict:
@@ -422,16 +414,14 @@ class KiteConnect(object):
         return self._format_response(self._get("orders"))
 
     def order_history(self, order_id):
-        """
-        Get history of individual order.
+        """Get history of individual order.
 
         - `order_id` is the ID of the order to retrieve order history.
         """
         return self._format_response(self._get("order.info", url_args={"order_id": order_id}))
 
     def trades(self):
-        """
-        Retrieve the list of trades executed (all or ones under a particular order).
+        """Retrieve the list of trades executed (all or ones under a particular order).
 
         An order can be executed in tranches based on market conditions.
         These trades are individually recorded under an order.
@@ -439,8 +429,7 @@ class KiteConnect(object):
         return self._format_response(self._get("trades"))
 
     def order_trades(self, order_id):
-        """
-        Retrieve the list of trades executed for a particular order.
+        """Retrieve the list of trades executed for a particular order.
 
         - `order_id` is the ID of the order to retrieve trade history.
         """
@@ -550,8 +539,7 @@ class KiteConnect(object):
         return self._parse_mf_instruments(self._get("mf.instruments"))
 
     def instruments(self, exchange=None):
-        """
-        Retrieve the list of market instruments available to trade.
+        """Retrieve the list of market instruments available to trade.
 
         Note that the results could be large, several hundred KBs in size,
         with tens of thousands of entries in the list.
@@ -564,8 +552,7 @@ class KiteConnect(object):
             return self._parse_instruments(self._get("market.instruments.all"))
 
     def quote(self, *instruments):
-        """
-        Retrieve quote for list of instruments.
+        """Retrieve quote for list of instruments.
 
         - `instruments` is a list of instruments, Instrument are in the format of `exchange:tradingsymbol`. For example NSE:INFY
         """
@@ -579,8 +566,7 @@ class KiteConnect(object):
         return {key: self._format_response(data[key]) for key in data}
 
     def ohlc(self, *instruments):
-        """
-        Retrieve OHLC and market depth for list of instruments.
+        """Retrieve OHLC and market depth for list of instruments.
 
         - `instruments` is a list of instruments, Instrument are in the format of `exchange:tradingsymbol`. For example NSE:INFY
         """
@@ -593,8 +579,7 @@ class KiteConnect(object):
         return self._get("market.quote.ohlc", params={"i": ins})
 
     def ltp(self, *instruments):
-        """
-        Retrieve last price for list of instruments.
+        """Retrieve last price for list of instruments.
 
         - `instruments` is a list of instruments, Instrument are in the format of `exchange:tradingsymbol`. For example NSE:INFY
         """
@@ -607,8 +592,7 @@ class KiteConnect(object):
         return self._get("market.quote.ltp", params={"i": ins})
 
     def historical_data(self, instrument_token, from_date, to_date, interval, continuous=False, oi=False):
-        """
-        Retrieve historical data (candles) for an instrument.
+        """Retrieve historical data (candles) for an instrument.
 
         Although the actual response JSON from the API does not have field
         names such has 'open', 'high' etc., this function call structures
@@ -699,7 +683,7 @@ class KiteConnect(object):
             # Assert required keys inside gtt order.
             for req in ["transaction_type", "quantity", "order_type", "product", "price"]:
                 if req not in o:
-                    raise ex.InputException("`{req}` missing inside orders".format(req=req))
+                    raise ex.InputException(f"`{req}` missing inside orders")
             gtt_orders.append(
                 {
                     "exchange": exchange,
@@ -715,8 +699,7 @@ class KiteConnect(object):
         return condition, gtt_orders
 
     def place_gtt(self, trigger_type, tradingsymbol, exchange, trigger_values, last_price, orders):
-        """
-        Place GTT order
+        """Place GTT order
 
         - `trigger_type` The type of GTT order(single/two-leg).
         - `tradingsymbol` Trading symbol of the instrument.
@@ -740,8 +723,7 @@ class KiteConnect(object):
         )
 
     def modify_gtt(self, trigger_id, trigger_type, tradingsymbol, exchange, trigger_values, last_price, orders):
-        """
-        Modify GTT order
+        """Modify GTT order
 
         - `trigger_type` The type of GTT order(single/two-leg).
         - `tradingsymbol` Trading symbol of the instrument.
@@ -768,16 +750,14 @@ class KiteConnect(object):
         return self._delete("gtt.delete", url_args={"trigger_id": trigger_id})
 
     def order_margins(self, params):
-        """
-        Calculate margins for requested order list considering the existing positions and open orders
+        """Calculate margins for requested order list considering the existing positions and open orders
 
         - `params` is list of orders to retrive margins detail
         """
         return self._post("order.margins", params=params, is_json=True)
 
     def basket_order_margins(self, params, consider_positions=True, mode=None):
-        """
-        Calculate total margins required for basket of orders including margin benefits
+        """Calculate total margins required for basket of orders including margin benefits
 
         - `params` is list of orders to fetch basket margin
         - `consider_positions` is a boolean to consider users positions
@@ -791,8 +771,7 @@ class KiteConnect(object):
         )
 
     def get_virtual_contract_note(self, params):
-        """
-        Calculates detailed charges order-wise for the order book
+        """Calculates detailed charges order-wise for the order book
         - `params` is list of orders to fetch charges detail
         """
         return self._post("order.contract_note", params=params, is_json=True)
@@ -893,13 +872,11 @@ class KiteConnect(object):
         if self.api_key and self.access_token:
             # set authorization header
             auth_header = self.api_key + ":" + self.access_token
-            headers["Authorization"] = "token {}".format(auth_header)
+            headers["Authorization"] = f"token {auth_header}"
 
         if self.debug:
             log.debug(
-                "Request: {method} {url} {params} {headers}".format(
-                    method=method, url=url, params=params, headers=headers
-                )
+                f"Request: {method} {url} {params} {headers}"
             )
 
         # prepare url query params
@@ -924,7 +901,7 @@ class KiteConnect(object):
             raise e
 
         if self.debug:
-            log.debug("Response: {code} {content}".format(code=r.status_code, content=r.content))
+            log.debug(f"Response: {r.status_code} {r.content}")
 
         # Validate the content type.
         if "json" in r.headers["content-type"]:
@@ -932,7 +909,7 @@ class KiteConnect(object):
                 data = r.json()
             except ValueError:
                 raise ex.DataException(
-                    "Couldn't parse the JSON response received from the server: {content}".format(content=r.content)
+                    f"Couldn't parse the JSON response received from the server: {r.content}"
                 )
 
             # api error

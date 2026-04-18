@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-exceptions.py
+"""exceptions.py
 
 Exceptions raised by the Kite Connect client.
 
@@ -10,8 +8,7 @@ Exceptions raised by the Kite Connect client.
 
 
 class KiteException(Exception):
-    """
-    Base exception class representing a Kite client exception.
+    """Base exception class representing a Kite client exception.
 
     Every specific Kite client exception is a subclass of this
     and  exposes two instance variables `.code` (HTTP error code)
@@ -20,7 +17,7 @@ class KiteException(Exception):
 
     def __init__(self, message, code=500):
         """Initialize the exception."""
-        super(KiteException, self).__init__(message)
+        super().__init__(message)
         self.code = code
 
 
@@ -29,7 +26,7 @@ class GeneralException(KiteException):
 
     def __init__(self, message, code=500):
         """Initialize the exception."""
-        super(GeneralException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class TokenException(KiteException):
@@ -37,7 +34,7 @@ class TokenException(KiteException):
 
     def __init__(self, message, code=403):
         """Initialize the exception."""
-        super(TokenException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class PermissionException(KiteException):
@@ -45,7 +42,7 @@ class PermissionException(KiteException):
 
     def __init__(self, message, code=403):
         """Initialize the exception."""
-        super(PermissionException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class OrderException(KiteException):
@@ -53,7 +50,7 @@ class OrderException(KiteException):
 
     def __init__(self, message, code=500):
         """Initialize the exception."""
-        super(OrderException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class InputException(KiteException):
@@ -61,7 +58,7 @@ class InputException(KiteException):
 
     def __init__(self, message, code=400):
         """Initialize the exception."""
-        super(InputException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class DataException(KiteException):
@@ -69,7 +66,7 @@ class DataException(KiteException):
 
     def __init__(self, message, code=502):
         """Initialize the exception."""
-        super(DataException, self).__init__(message, code)
+        super().__init__(message, code)
 
 
 class NetworkException(KiteException):
@@ -77,4 +74,4 @@ class NetworkException(KiteException):
 
     def __init__(self, message, code=503):
         """Initialize the exception."""
-        super(NetworkException, self).__init__(message, code)
+        super().__init__(message, code)

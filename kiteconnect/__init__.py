@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Kite Connect API client for Python -- [kite.trade](https://kite.trade).
+"""Kite Connect API client for Python -- [kite.trade](https://kite.trade).
 
 Zerodha Technology Pvt. Ltd. (c) 2021
 
@@ -106,7 +104,6 @@ by looking at HTTP codes or JSON error responses. Instead,
 it raises aptly named **[exceptions](exceptions.m.html)** that you can catch.
 """
 
-from __future__ import unicode_literals, absolute_import
 
 from kiteconnect import exceptions
 from kiteconnect.connect import KiteConnect

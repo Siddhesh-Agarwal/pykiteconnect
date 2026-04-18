@@ -12,13 +12,16 @@ import hashlib
 import json
 import logging
 import warnings
+from urllib.parse import urljoin
 
 import dateutil.parser
 import requests
+import requests.adapters
+import urllib3
 from six import PY2, StringIO
-from six.moves.urllib.parse import urljoin
 
 import kiteconnect.exceptions as ex
+from kiteconnect.types import Exchange, GTTType
 
 from .__version__ import __title__, __version__
 
@@ -41,71 +44,8 @@ class KiteConnect:
     kite_header_version = "3"
 
     # Constants
-    # Products
-    PRODUCT_MIS = "MIS"
-    PRODUCT_CNC = "CNC"
-    PRODUCT_NRML = "NRML"
-    PRODUCT_CO = "CO"
-
-    # Order types
-    ORDER_TYPE_MARKET = "MARKET"
-    ORDER_TYPE_LIMIT = "LIMIT"
-    ORDER_TYPE_SLM = "SL-M"
-    ORDER_TYPE_SL = "SL"
-
     # Market protection
     MARKET_PROTECTION_AUTO = -1
-
-    # Varities
-    VARIETY_REGULAR = "regular"
-    VARIETY_CO = "co"
-    VARIETY_AMO = "amo"
-    VARIETY_ICEBERG = "iceberg"
-    VARIETY_AUCTION = "auction"
-
-    # Transaction type
-    TRANSACTION_TYPE_BUY = "BUY"
-    TRANSACTION_TYPE_SELL = "SELL"
-
-    # Validity
-    VALIDITY_DAY = "DAY"
-    VALIDITY_IOC = "IOC"
-    VALIDITY_TTL = "TTL"
-
-    # Position Type
-    POSITION_TYPE_DAY = "day"
-    POSITION_TYPE_OVERNIGHT = "overnight"
-
-    # Exchanges
-    EXCHANGE_NSE = "NSE"
-    EXCHANGE_BSE = "BSE"
-    EXCHANGE_NFO = "NFO"
-    EXCHANGE_CDS = "CDS"
-    EXCHANGE_BFO = "BFO"
-    EXCHANGE_MCX = "MCX"
-    EXCHANGE_BCD = "BCD"
-
-    # Margins segments
-    MARGIN_EQUITY = "equity"
-    MARGIN_COMMODITY = "commodity"
-
-    # Status constants
-    STATUS_COMPLETE = "COMPLETE"
-    STATUS_REJECTED = "REJECTED"
-    STATUS_CANCELLED = "CANCELLED"
-
-    # GTT order type
-    GTT_TYPE_OCO = "two-leg"
-    GTT_TYPE_SINGLE = "single"
-
-    # GTT order status
-    GTT_STATUS_ACTIVE = "active"
-    GTT_STATUS_TRIGGERED = "triggered"
-    GTT_STATUS_DISABLED = "disabled"
-    GTT_STATUS_EXPIRED = "expired"
-    GTT_STATUS_CANCELLED = "cancelled"
-    GTT_STATUS_REJECTED = "rejected"
-    GTT_STATUS_DELETED = "deleted"
 
     # URIs to various calls
     _routes = {
@@ -208,7 +148,7 @@ class KiteConnect:
             self.reqsession.mount("https://", reqadapter)
 
         # disable requests SSL warning
-        requests.packages.urllib3.disable_warnings()
+        urllib3.disable_warnings()
 
     def set_session_expiry_hook(self, method):
         """Set a callback hook for session (`TokenError` -- timeout, expiry etc.) errors.
@@ -666,9 +606,9 @@ class KiteConnect:
         """Get GTT payload"""
         if not isinstance(trigger_values, list):
             raise ex.InputException("invalid type for `trigger_values`")
-        if trigger_type == self.GTT_TYPE_SINGLE and len(trigger_values) != 1:
+        if trigger_type == GTTType.SINGLE and len(trigger_values) != 1:
             raise ex.InputException("invalid `trigger_values` for single leg order type")
-        elif trigger_type == self.GTT_TYPE_OCO and len(trigger_values) != 2:
+        elif trigger_type == GTTType.OCO and len(trigger_values) != 2:
             raise ex.InputException("invalid `trigger_values` for OCO order type")
 
         condition = {
@@ -698,7 +638,15 @@ class KiteConnect:
 
         return condition, gtt_orders
 
-    def place_gtt(self, trigger_type, tradingsymbol, exchange, trigger_values, last_price, orders):
+    def place_gtt(
+        self,
+        trigger_type: GTTType,
+        tradingsymbol: str,
+        exchange: Exchange,
+        trigger_values: list,
+        last_price: float,
+        orders: list,
+    ):
         """Place GTT order
 
         - `trigger_type` The type of GTT order(single/two-leg).
@@ -712,7 +660,7 @@ class KiteConnect:
             - `price` The min or max price to execute the order at (for LIMIT orders)
         """
         # Validations.
-        assert trigger_type in [self.GTT_TYPE_OCO, self.GTT_TYPE_SINGLE]
+        assert trigger_type in [GTTType.OCO, GTTType.SINGLE]
         condition, gtt_orders = self._get_gtt_payload(
             trigger_type, tradingsymbol, exchange, trigger_values, last_price, orders
         )

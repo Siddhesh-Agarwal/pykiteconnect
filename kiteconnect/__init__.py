@@ -104,9 +104,8 @@ by looking at HTTP codes or JSON error responses. Instead,
 it raises aptly named **[exceptions](exceptions.m.html)** that you can catch.
 """
 
-
-from kiteconnect import exceptions
+from kiteconnect import exceptions, types
 from kiteconnect.connect import KiteConnect
 from kiteconnect.ticker import KiteTicker
 
-__all__ = ["KiteConnect", "KiteTicker", "exceptions"]
+__all__ = ["KiteConnect", "KiteTicker", "exceptions", "types"]

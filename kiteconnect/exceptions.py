@@ -15,7 +15,7 @@ class KiteException(Exception):
     and `.message` (error text).
     """
 
-    def __init__(self, message, code=500):
+    def __init__(self, message: str, code: int = 500):
         """Initialize the exception."""
         super().__init__(message)
         self.code = code
@@ -24,7 +24,7 @@ class KiteException(Exception):
 class GeneralException(KiteException):
     """An unclassified, general error. Default code is 500."""
 
-    def __init__(self, message, code=500):
+    def __init__(self, message: str, code: int = 500):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -32,7 +32,7 @@ class GeneralException(KiteException):
 class TokenException(KiteException):
     """Represents all token and authentication related errors. Default code is 403."""
 
-    def __init__(self, message, code=403):
+    def __init__(self, message: str, code: int = 403):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -40,7 +40,7 @@ class TokenException(KiteException):
 class PermissionException(KiteException):
     """Represents permission denied exceptions for certain calls. Default code is 403."""
 
-    def __init__(self, message, code=403):
+    def __init__(self, message: str, code: int = 403):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -48,7 +48,7 @@ class PermissionException(KiteException):
 class OrderException(KiteException):
     """Represents all order placement and manipulation errors. Default code is 500."""
 
-    def __init__(self, message, code=500):
+    def __init__(self, message: str, code: int = 500):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -56,7 +56,7 @@ class OrderException(KiteException):
 class InputException(KiteException):
     """Represents user input errors such as missing and invalid parameters. Default code is 400."""
 
-    def __init__(self, message, code=400):
+    def __init__(self, message: str, code: int = 400):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -64,7 +64,7 @@ class InputException(KiteException):
 class DataException(KiteException):
     """Represents a bad response from the backend Order Management System (OMS). Default code is 502."""
 
-    def __init__(self, message, code=502):
+    def __init__(self, message: str, code: int = 502):
         """Initialize the exception."""
         super().__init__(message, code)
 
@@ -72,6 +72,6 @@ class DataException(KiteException):
 class NetworkException(KiteException):
     """Represents a network issue between Kite and the backend Order Management System (OMS). Default code is 503."""
 
-    def __init__(self, message, code=503):
+    def __init__(self, message: str, code: int = 503):
         """Initialize the exception."""
         super().__init__(message, code)

@@ -63,13 +63,13 @@ class KiteTickerClientProtocol(WebSocketClientProtocol):
             self.factory.on_open(self)
 
     # Overide method
-    def onMessage(self, payload, is_binary):
+    def onMessage(self, payload, is_binary: bool):
         """Called when text or binary message is received."""
         if self.factory.on_message:
             self.factory.on_message(self, payload, is_binary)
 
     # Overide method
-    def onClose(self, was_clean, code, reason):
+    def onClose(self, was_clean: bool, code: int, reason: str):
         """Called when connection is closed."""
         if not was_clean:
             if self.factory.on_error:

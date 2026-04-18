@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import warnings
+from typing import Literal
 from urllib.parse import urljoin
 
 import dateutil.parser
@@ -572,7 +573,7 @@ class KiteConnect:
 
     def historical_data(
         self,
-        instrument_token: str,
+        instrument_token: int,
         from_date: datetime.datetime | str,
         to_date: datetime.datetime | str,
         interval: str,
@@ -768,7 +769,9 @@ class KiteConnect:
         """
         return self._post("order.margins", params=params, is_json=True)
 
-    def basket_order_margins(self, params: list, consider_positions: bool = True, mode=None):
+    def basket_order_margins(
+        self, params: list, consider_positions: bool = True, mode: Literal["compact"] | None = None
+    ):
         """Calculate total margins required for basket of orders including margin benefits
 
         - `params` is list of orders to fetch basket margin

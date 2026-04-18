@@ -566,7 +566,7 @@ class KiteTicker:
         if self.factory:
             self.factory.stopTrying()
 
-    def subscribe(self, instrument_tokens: list[str]) -> bool:
+    def subscribe(self, instrument_tokens: list[int]) -> bool:
         """Subscribe to a list of instrument_tokens.
 
         - `instrument_tokens` is list of instrument instrument_tokens to subscribe
@@ -582,7 +582,7 @@ class KiteTicker:
             self._close(reason=f"Error while subscribe: {e!s}")
             raise
 
-    def unsubscribe(self, instrument_tokens: list[str]) -> Literal[True]:
+    def unsubscribe(self, instrument_tokens: list[int]) -> Literal[True]:
         """Unsubscribe the given list of instrument_tokens.
 
         - `instrument_tokens` is list of instrument_tokens to unsubscribe.
@@ -601,7 +601,7 @@ class KiteTicker:
             self._close(reason=f"Error while unsubscribe: {e!s}")
             raise
 
-    def set_mode(self, mode: str, instrument_tokens: list[str]) -> bool:
+    def set_mode(self, mode: str, instrument_tokens: list[int]) -> bool:
         """Set streaming mode for the given list of tokens.
 
         - `mode` is the mode to set. It can be one of the following class constants:

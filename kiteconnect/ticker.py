@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-    ticker.py
+ticker.py
 
-    Websocket implementation for kite ticker
+Websocket implementation for kite ticker
 
-    :copyright: (c) 2021 by Zerodha Technology Pvt. Ltd.
-    :license: see LICENSE for details.
+:copyright: (c) 2021 by Zerodha Technology Pvt. Ltd.
+:license: see LICENSE for details.
 """
+
 import six
 import sys
 import time
@@ -18,8 +19,7 @@ from datetime import datetime
 from twisted.internet import reactor, ssl
 from twisted.python import log as twisted_log
 from twisted.internet.protocol import ReconnectingClientFactory
-from autobahn.twisted.websocket import WebSocketClientProtocol, \
-    WebSocketClientFactory, connectWS
+from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory, connectWS
 
 from .__version__ import __version__, __title__
 
@@ -126,8 +126,9 @@ class KiteTickerClientProtocol(WebSocketClientProtocol):
             last_pong_diff = time.time() - self._last_pong_time
             if last_pong_diff > (2 * self.PING_INTERVAL):
                 if self.factory.debug:
-                    log.debug("Last pong was {} seconds ago. So dropping connection to reconnect.".format(
-                        last_pong_diff))
+                    log.debug(
+                        "Last pong was {} seconds ago. So dropping connection to reconnect.".format(last_pong_diff)
+                    )
                 # drop existing connection to avoid ghost connection
                 self.dropConnection(abort=True)
 
@@ -168,7 +169,11 @@ class KiteTickerClientFactory(WebSocketClientFactory, ReconnectingClientFactory)
     def clientConnectionFailed(self, connector, reason):  # noqa
         """On connection failure (When connect request fails)"""
         if self.retries > 0:
-            log.error("Retrying connection. Retry attempt count: {}. Next retry in around: {} seconds".format(self.retries, int(round(self.delay))))
+            log.error(
+                "Retrying connection. Retry attempt count: {}. Next retry in around: {} seconds".format(
+                    self.retries, int(round(self.delay))
+                )
+            )
 
             # on reconnect callback
             if self.on_reconnect:
@@ -400,9 +405,17 @@ class KiteTicker(object):
     # Maximum number or retries user can set
     _maximum_reconnect_max_tries = 300
 
-    def __init__(self, api_key, access_token, debug=False, root=None,
-                 reconnect=True, reconnect_max_tries=RECONNECT_MAX_TRIES, reconnect_max_delay=RECONNECT_MAX_DELAY,
-                 connect_timeout=CONNECT_TIMEOUT):
+    def __init__(
+        self,
+        api_key,
+        access_token,
+        debug=False,
+        root=None,
+        reconnect=True,
+        reconnect_max_tries=RECONNECT_MAX_TRIES,
+        reconnect_max_delay=RECONNECT_MAX_DELAY,
+        connect_timeout=CONNECT_TIMEOUT,
+    ):
         """
         Initialise websocket client instance.
 
@@ -424,28 +437,31 @@ class KiteTicker(object):
 
         # Set max reconnect tries
         if reconnect_max_tries > self._maximum_reconnect_max_tries:
-            log.warning("`reconnect_max_tries` can not be more than {val}. Setting to highest possible value - {val}.".format(
-                val=self._maximum_reconnect_max_tries))
+            log.warning(
+                "`reconnect_max_tries` can not be more than {val}. Setting to highest possible value - {val}.".format(
+                    val=self._maximum_reconnect_max_tries
+                )
+            )
             self.reconnect_max_tries = self._maximum_reconnect_max_tries
         else:
             self.reconnect_max_tries = reconnect_max_tries
 
         # Set max reconnect delay
         if reconnect_max_delay < self._minimum_reconnect_max_delay:
-            log.warning("`reconnect_max_delay` can not be less than {val}. Setting to lowest possible value - {val}.".format(
-                val=self._minimum_reconnect_max_delay))
+            log.warning(
+                "`reconnect_max_delay` can not be less than {val}. Setting to lowest possible value - {val}.".format(
+                    val=self._minimum_reconnect_max_delay
+                )
+            )
             self.reconnect_max_delay = self._minimum_reconnect_max_delay
         else:
             self.reconnect_max_delay = reconnect_max_delay
 
         self.connect_timeout = connect_timeout
 
-        self.socket_url = "{root}?api_key={api_key}"\
-            "&access_token={access_token}".format(
-                root=self.root,
-                api_key=api_key,
-                access_token=access_token
-            )
+        self.socket_url = "{root}?api_key={api_key}&access_token={access_token}".format(
+            root=self.root, api_key=api_key, access_token=access_token
+        )
 
         # Debug enables logs
         self.debug = debug
@@ -507,9 +523,7 @@ class KiteTicker(object):
         }
 
         # Init WebSocket client factory
-        self._create_connection(self.socket_url,
-                                useragent=self._user_agent(),
-                                proxy=proxy, headers=headers)
+        self._create_connection(self.socket_url, useragent=self._user_agent(), proxy=proxy, headers=headers)
 
         # Set SSL context
         context_factory = None
@@ -571,9 +585,7 @@ class KiteTicker(object):
         - `instrument_tokens` is list of instrument instrument_tokens to subscribe
         """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_subscribe, "v": instrument_tokens}))
-            )
+            self.ws.sendMessage(six.b(json.dumps({"a": self._message_subscribe, "v": instrument_tokens})))
 
             for token in instrument_tokens:
                 self.subscribed_tokens[token] = self.MODE_QUOTE
@@ -590,13 +602,11 @@ class KiteTicker(object):
         - `instrument_tokens` is list of instrument_tokens to unsubscribe.
         """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_unsubscribe, "v": instrument_tokens}))
-            )
+            self.ws.sendMessage(six.b(json.dumps({"a": self._message_unsubscribe, "v": instrument_tokens})))
 
             for token in instrument_tokens:
                 try:
-                    del (self.subscribed_tokens[token])
+                    del self.subscribed_tokens[token]
                 except KeyError:
                     pass
 
@@ -614,9 +624,7 @@ class KiteTicker(object):
         - `instrument_tokens` is list of instrument tokens on which the mode should be applied
         """
         try:
-            self.ws.sendMessage(
-                six.b(json.dumps({"a": self._message_setmode, "v": [mode, instrument_tokens]}))
-            )
+            self.ws.sendMessage(six.b(json.dumps({"a": self._message_setmode, "v": [mode, instrument_tokens]})))
 
             # Update modes
             for token in instrument_tokens:
@@ -723,7 +731,7 @@ class KiteTicker(object):
 
         for packet in packets:
             instrument_token = self._unpack_int(packet, 0, 4)
-            segment = instrument_token & 0xff  # Retrive segment constant from instrument_token
+            segment = instrument_token & 0xFF  # Retrive segment constant from instrument_token
 
             # Add price divisor based on segment
             if segment == self.EXCHANGE_MAP["cds"]:
@@ -738,12 +746,14 @@ class KiteTicker(object):
 
             # LTP packets
             if len(packet) == 8:
-                data.append({
-                    "tradable": tradable,
-                    "mode": self.MODE_LTP,
-                    "instrument_token": instrument_token,
-                    "last_price": self._unpack_int(packet, 4, 8) / divisor
-                })
+                data.append(
+                    {
+                        "tradable": tradable,
+                        "mode": self.MODE_LTP,
+                        "instrument_token": instrument_token,
+                        "last_price": self._unpack_int(packet, 4, 8) / divisor,
+                    }
+                )
             # Indices quote and full mode
             elif len(packet) == 28 or len(packet) == 32:
                 mode = self.MODE_QUOTE if len(packet) == 28 else self.MODE_FULL
@@ -757,13 +767,13 @@ class KiteTicker(object):
                         "high": self._unpack_int(packet, 8, 12) / divisor,
                         "low": self._unpack_int(packet, 12, 16) / divisor,
                         "open": self._unpack_int(packet, 16, 20) / divisor,
-                        "close": self._unpack_int(packet, 20, 24) / divisor
-                    }
+                        "close": self._unpack_int(packet, 20, 24) / divisor,
+                    },
                 }
 
                 # Compute the change price using close price and last price
                 d["change"] = 0
-                if (d["ohlc"]["close"] != 0):
+                if d["ohlc"]["close"] != 0:
                     d["change"] = (d["last_price"] - d["ohlc"]["close"]) * 100 / d["ohlc"]["close"]
 
                 # Full mode with timestamp
@@ -794,13 +804,13 @@ class KiteTicker(object):
                         "open": self._unpack_int(packet, 28, 32) / divisor,
                         "high": self._unpack_int(packet, 32, 36) / divisor,
                         "low": self._unpack_int(packet, 36, 40) / divisor,
-                        "close": self._unpack_int(packet, 40, 44) / divisor
-                    }
+                        "close": self._unpack_int(packet, 40, 44) / divisor,
+                    },
                 }
 
                 # Compute the change price using close price and last price
                 d["change"] = 0
-                if (d["ohlc"]["close"] != 0):
+                if d["ohlc"]["close"] != 0:
                     d["change"] = (d["last_price"] - d["ohlc"]["close"]) * 100 / d["ohlc"]["close"]
 
                 # Parse full mode
@@ -822,18 +832,17 @@ class KiteTicker(object):
                     d["exchange_timestamp"] = timestamp
 
                     # Market depth entries.
-                    depth = {
-                        "buy": [],
-                        "sell": []
-                    }
+                    depth = {"buy": [], "sell": []}
 
                     # Compile the market depth lists.
                     for i, p in enumerate(range(64, len(packet), 12)):
-                        depth["sell" if i >= 5 else "buy"].append({
-                            "quantity": self._unpack_int(packet, p, p + 4),
-                            "price": self._unpack_int(packet, p + 4, p + 8) / divisor,
-                            "orders": self._unpack_int(packet, p + 8, p + 10, byte_format="H")
-                        })
+                        depth["sell" if i >= 5 else "buy"].append(
+                            {
+                                "quantity": self._unpack_int(packet, p, p + 4),
+                                "price": self._unpack_int(packet, p + 4, p + 8) / divisor,
+                                "orders": self._unpack_int(packet, p + 8, p + 10, byte_format="H"),
+                            }
+                        )
 
                     d["depth"] = depth
 
@@ -857,7 +866,7 @@ class KiteTicker(object):
         j = 2
         for i in range(number_of_packets):
             packet_length = self._unpack_int(bin, j, j + 2, byte_format="H")
-            packets.append(bin[j + 2: j + 2 + packet_length])
+            packets.append(bin[j + 2 : j + 2 + packet_length])
             j = j + 2 + packet_length
 
         return packets

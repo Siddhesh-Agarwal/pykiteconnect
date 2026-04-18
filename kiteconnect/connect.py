@@ -829,22 +829,18 @@ class KiteConnect:
         if method in ["GET", "DELETE"]:
             query_params = params
 
-        try:
-            r = self.reqsession.request(
-                method,
-                url,
-                json=params if (method in ["POST", "PUT"] and is_json) else None,
-                data=params if (method in ["POST", "PUT"] and not is_json) else None,
-                params=query_params,
-                headers=headers,
-                verify=not self.disable_ssl,
-                allow_redirects=True,
-                timeout=self.timeout,
-                proxies=self.proxies,
-            )
-        # Any requests lib related exceptions are raised here - https://requests.readthedocs.io/en/latest/api/#exceptions
-        except Exception as e:
-            raise e
+        r = self.reqsession.request(
+            method,
+            url,
+            json=params if (method in ["POST", "PUT"] and is_json) else None,
+            data=params if (method in ["POST", "PUT"] and not is_json) else None,
+            params=query_params,
+            headers=headers,
+            verify=not self.disable_ssl,
+            allow_redirects=True,
+            timeout=self.timeout,
+            proxies=self.proxies,
+        )
 
         if self.debug:
             log.debug(f"Response: {r.status_code} {r.content}")
